@@ -23,9 +23,11 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let data = [
-        ("abc".to_string(), Decimal::new(5, 0)),
-        ("def".to_string(), Decimal::new(3, 0)),
-        ("ghi".to_string(), Decimal::new(7, 0)),
+        ("abc".to_string(), Decimal::new(50, 0)),
+        ("def".to_string(), Decimal::new(30, 0)),
+        ("ghi".to_string(), Decimal::new(70, 0)),
+        ("a12".to_string(), Decimal::new(56, 0)),
+        ("a13".to_string(), Decimal::new(90, 0)),
     ]
     .into();
     let basic = RectChart::basic_column(&data

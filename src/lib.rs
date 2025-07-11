@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, bail, ensure};
 use rust_decimal::Decimal;
-use tracing::error;
+use tracing::{Level, error, event, info};
 
 mod svg;
 
@@ -147,7 +147,7 @@ impl RectChart<String, usize, Decimal, (), 2> {
             plot_vaues: Box::new(|v| [Decimal::ZERO, *v]),
             plot_shape: Box::new(|_, _, _, _| [ShapeInfo::StartRect, ShapeInfo::EndRect]),
             value_lines: Vec::new(),
-            categories_gutter_proportion: Proportion(Decimal::new(3, 1)),
+            categories_gutter_proportion: Proportion(Decimal::new(1, 1)),
             categories_name_proportion: Proportion(Decimal::new(2, 1)),
             categoires_name_location: LocationOrdering::Before,
             values_name_proportion: Proportion(Decimal::new(2, 1)),
@@ -166,6 +166,12 @@ impl RectChart<String, usize, Decimal, (), 2> {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 struct Proportion(Decimal);
+
+impl Display for Proportion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 impl Proportion {
     fn remainder(self) -> Proportion {
         Proportion(Decimal::ONE - self.0)
@@ -235,6 +241,12 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             bail!("Cannot render a chart with empty dataset");
         };
 
+        info!(
+            "categories_proportion={categories_proportion},values_proportion={values_proportion},category_set={}..{},min={min},max={max}",
+            category_set.first().unwrap(),
+            category_set.last().unwrap()
+        );
+
         // this will be used for queries proportional to the values
         let values_range = max - min;
 
@@ -246,6 +258,10 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
 
         let value_plot_range = value_plot_max - value_plot_min;
         // figure out the total size we need
+
+        info!(
+            "values_range={values_range} lines_min={lines_min:?} lines_max={lines_max:?} value_plot_min={value_plot_min} value_plot_max={value_plot_max} value_plot_range={value_plot_range}"
+        );
 
         let swap_if_required = |p: Point| match self.category_location {
             Location::Horizontal => p,
@@ -261,12 +277,21 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             })
         };
 
+        info!("extent {extent:?}");
+
         let mut chart = SvgChart {
             extent,
             labels: Vec::new(),
-            rects: Vec::new(),
+            rects: Vec::from([
+                SvgRect {
+                    start: Point { x: Decimal::ZERO, y: Decimal::ZERO},
+                    size: extent,
+                    color: "grey".to_string(),
+                }
+            ]),
             lines: Vec::new(),
         };
+        
 
         // add all rects and labels
         // TODO: text wrapping. just render on one line for now
@@ -285,16 +310,16 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             .category_location
         {
             Location::Horizontal => (
-                chart.extent.x / categories_proportion.0 / Decimal::from(map.len()),
-                chart.extent.x / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
-                chart.extent.x / self.values_name_proportion.0,
-                chart.extent.y / self.categories_name_proportion.0,
+                chart.extent.x * categories_proportion.0 / Decimal::from(map.len()),
+                chart.extent.x * self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
+                chart.extent.x * self.values_name_proportion.0,
+                chart.extent.y * self.categories_name_proportion.0,
             ),
             Location::Vertical => (
-                chart.extent.y / categories_proportion.0 / Decimal::from(map.len()),
-                chart.extent.y / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
-                chart.extent.y / self.values_name_proportion.0,
-                chart.extent.x / self.categories_name_proportion.0,
+                chart.extent.y * categories_proportion.0 / Decimal::from(map.len()),
+                chart.extent.y * self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
+                chart.extent.y * self.values_name_proportion.0,
+                chart.extent.x * self.categories_name_proportion.0,
             ),
         };
 
@@ -322,9 +347,12 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             let plot_shape = (self.plot_shape)(&c.display, &c.ordering, &v.value, &v.extra);
 
             // calculate rect width start/end
-            let rect_width_start = rect_area_start + Decimal::from(plot_idx) * rect_width;
+            let rect_width_start = rect_area_start + Decimal::from(plot_idx) * (rect_width + gutter_width);
             let rect_width_end = rect_width_start + rect_width;
 
+            info!(
+                "category_style={category_style:?} display_category={display_category} tooltip_values={tooltip_values:?} plot_values={plot_values:?} plot_shape={plot_shape:?} rect_width_start={rect_width_start} rect_width_end={rect_width_end}"
+            );
             let mut started_rect = None;
             for i in 0..N {
                 let previous_shape = i.checked_sub(1).map(|ix| plot_shape[ix]);
@@ -421,6 +449,7 @@ struct TextStyle {
     // size? proportional?
 }
 
+#[derive(Debug)]
 struct RectStyle {
     color: String,
     // later shading, gradients
