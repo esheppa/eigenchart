@@ -94,13 +94,16 @@ struct RectChart<D, O, V, E, const N: usize> {
     // don't need lines to seperate categories...
     value_lines: Vec<(Decimal, LineStyle)>,
 
+    // where the proportion is for a dynamic number of things, it applies once
     categories_gutter_proportion: Proportion,
     // categories_margin_proportion: Proportion,
     // categories_padding_proportion: Proportion,
     categories_name_proportion: Proportion,
     categoires_name_location: LocationOrdering,
 
+    // where it is for a known limited set of things it applies each time, here it is applied once or twice (or zero times????)
     values_name_proportion: Proportion,
+
     values_name_location: LocationOrdering,
 
     horizontal_border_style: Option<LineStyle>,
@@ -193,13 +196,13 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             match self.category_location {
                 // column chart
                 Location::Horizontal => Point {
-                    x: Decimal::from(10_000),
+                    x: Decimal::from(100),
                     y: value_plot_range / values_proportion.remainder().0,
                 },
                 // beam char
                 Location::Vertical => Point {
                     x: value_plot_range / values_proportion.remainder().0,
-                    y: Decimal::from(10_000),
+                    y: Decimal::from(100),
                 },
             }
         };
@@ -213,10 +216,54 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
 
         // add all rects and labels
         // TODO: text wrapping. just render on one line for now
-        for (c, v) in &self.data {
-            // organize into ordered plot categories
-            // enumerate it
-            // so that we know how to plot
+        // we have alreay ensured that there are no overlapping
+        // organize into ordered plot categories
+        // enumerate it
+        // so that we know how to plot
+
+        let map = self
+            .data
+            .iter()
+            .map(|x| ((self.plot_category)(&x.0.ordering), x))
+            .collect::<BTreeMap<_, _>>();
+
+        let (rect_width, gutter_width, name_width) = match self.category_location {
+            Location::Horizontal => (
+                chart.extent.x / categories_proportion.0 / Decimal::from(map.len()),
+                chart.extent.x / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
+                chart.extent.x / self.values_name_proportion.0,
+            ),
+            Location::Vertical => (
+                chart.extent.y / categories_proportion.0 / Decimal::from(map.len()),
+                chart.extent.y / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
+                chart.extent.y / self.values_name_proportion.0,
+            ),
+        };
+
+        let rect_area_start = match self.values_name_location {
+            // will be auto applied at the end due to the rects and gutters being scaled down by the required space for the names
+            LocationOrdering::Before | LocationOrdering::Both => name_width, 
+            LocationOrdering::After => Decimal::ZERO,
+        } + gutter_width; // add one gutter, will add one more after each rect is added
+        // let rect_area_end = match self.values_name_location {
+        //     LocationOrdering::Before => todo!(),
+        //     LocationOrdering::After => todo!(),
+        //     LocationOrdering::Both => todo!(),
+        // };
+
+        for (plot_idx, (plot_category, (c, v))) in map.into_iter().enumerate() {
+            let category_style = (self.category_style)(&c.display, &c.ordering);
+            let display_category = (self.display_category)(&c.display, &c.ordering);
+            let tooltip_values = (self.tooltip_values)(&v.value);
+            let plot_vaues = (self.plot_vaues)(&v.value);
+            let plot_shape = (self.plot_shape)(&c.display, &c.ordering, &v.value, &v.extra);
+
+            // calculate rect width start/end
+            let rect_width_start = rect_area_start + Decimal::from(plot_idx) * rect_width;
+            let rect_width_end = rect_width_start + rect_width;
+
+            // 
+
         }
 
         // add value lines and labels

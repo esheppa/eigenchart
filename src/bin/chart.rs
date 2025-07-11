@@ -1,7 +1,5 @@
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
-
-
+use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()

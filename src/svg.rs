@@ -1,10 +1,12 @@
-use std::{fmt::Display, iter::Sum, num::NonZeroU32, ops::{Add, AddAssign, Mul}};
+use std::{
+    fmt::Display,
+    iter::Sum,
+    num::NonZeroU32,
+    ops::{Add, AddAssign, Mul},
+};
 
 use serde::{Deserialize, Serialize};
 use tracing::info;
-
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NonZeroMm(NonZeroU32);
@@ -27,7 +29,6 @@ impl NonZeroMm {
         self.0.checked_mul(oth).map(NonZeroMm)
     }
 }
-
 
 impl Display for NonZeroMm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -214,7 +215,6 @@ impl SvgVecDirection {
         }
     }
 }
-
 
 // (0,0) is top left
 pub struct Svg {
