@@ -262,6 +262,28 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             let rect_width_start = rect_area_start + Decimal::from(plot_idx) * rect_width;
             let rect_width_end = rect_width_start + rect_width;
 
+            let mut partial_rect = None;
+
+            for i in 0..N {
+                match (plot_shape[i], partial_rect) {
+                    (ShapeInfo::Line, _) => todo!(),
+                    (ShapeInfo::StartRect, None) => {
+                        
+                    }
+                    (ShapeInfo::EndRect, Some(start)) => {
+                    
+                    }
+                    (a, b) => {
+                        bail!("Unexpected combination {a:?} and {b:?}");
+                    }
+                }
+                
+            }
+
+            if partial_rect.is_some() {
+                bail!("Unclosed rect");
+            }
+
             // 
 
         }
