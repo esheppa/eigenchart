@@ -1,3 +1,8 @@
+use std::fs;
+
+use anyhow::Context;
+use eigenchart::RectChart;
+use rust_decimal::Decimal;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 
@@ -16,6 +21,19 @@ fn main() -> anyhow::Result<()> {
         .pretty()
         .finish()
         .init();
+
+    let data = [
+        ("abc".to_string(), Decimal::new(5, 0)),
+        ("def".to_string(), Decimal::new(3, 0)),
+        ("ghi".to_string(), Decimal::new(7, 0)),
+    ]
+    .into();
+    let basic = RectChart::basic_column(&data
+    );
+
+    let svg = basic.render().context("render chart")?;
+
+    fs::write("chart.svg", svg.to_string()).context("write chart")?;
 
     Ok(())
 }

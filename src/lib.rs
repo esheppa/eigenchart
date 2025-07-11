@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{Context, bail, ensure};
 use rust_decimal::Decimal;
+use tracing::error;
 
 mod svg;
 
@@ -80,13 +81,13 @@ impl Display for LocationOrdering {
 // - categories are rect, multirect, candlestick, boxplot, etc, etc
 
 // the amount of fields is diabolical, but is kept private.
-struct RectChart<D, O, V, E, const N: usize> {
+pub struct RectChart<D, O, V, E, const N: usize> {
     data: Vec<(Category<D, O>, Value<V, E>)>,
     tooltip: Box<dyn Fn(D, O, V, E) -> String>,
     category_location: Location,
     category_style: Box<dyn Fn(&D, &O) -> RectStyle>,
     display_category: Box<dyn Fn(&D, &O) -> String>,
-    plot_category: Box<dyn Fn(&O) -> u32>,
+    plot_category: Box<dyn Fn(&O) -> usize>,
     tooltip_values: Box<dyn Fn(&V) -> [String; N]>,
     plot_vaues: Box<dyn Fn(&V) -> [Decimal; N]>,
     plot_shape: Box<dyn Fn(&D, &O, &V, &E) -> [ShapeInfo; N]>, // if invalid, eg EndRect before start or multiple start with no end, validation will catch it
@@ -111,6 +112,56 @@ struct RectChart<D, O, V, E, const N: usize> {
     value_line_style: LineStyle,
 
     chart_title: String, // need a better location ... and also specify whether in/out of chart
+    width_to_height_ratio: Decimal,
+}
+
+impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {}
+
+impl RectChart<String, usize, Decimal, (), 2> {
+    pub fn basic_column(data: &BTreeMap<String, Decimal>) -> Self {
+        RectChart {
+            data: data
+                .iter()
+                .enumerate()
+                .map(|(ordering, (c, v))| {
+                    (
+                        Category {
+                            display: c.to_string(),
+                            ordering,
+                        },
+                        Value {
+                            value: *v,
+                            extra: (),
+                        },
+                    )
+                })
+                .collect(),
+            tooltip: Box::new(|_, _, _, _| String::new()),
+            category_location: Location::Horizontal,
+            category_style: Box::new(|_, _| RectStyle {
+                color: "red".to_string(),
+            }),
+            display_category: Box::new(|d, _| d.to_string()),
+            plot_category: Box::new(|o| *o),
+            tooltip_values: Box::new(|_| [String::new(), String::new()]),
+            plot_vaues: Box::new(|v| [Decimal::ZERO, *v]),
+            plot_shape: Box::new(|_, _, _, _| [ShapeInfo::StartRect, ShapeInfo::EndRect]),
+            value_lines: Vec::new(),
+            categories_gutter_proportion: Proportion(Decimal::new(3, 1)),
+            categories_name_proportion: Proportion(Decimal::new(2, 1)),
+            categoires_name_location: LocationOrdering::Before,
+            values_name_proportion: Proportion(Decimal::new(2, 1)),
+            values_name_location: LocationOrdering::Before,
+            horizontal_border_style: None,
+            vertical_border_style: None,
+            value_line_style: LineStyle {
+                color: "black".to_string(),
+                drawing: LineDrawingStyle::Solid,
+            },
+            chart_title: "abc".to_string(),
+            width_to_height_ratio: Decimal::ONE,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
@@ -131,7 +182,11 @@ impl Proportion {
 }
 
 impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
-    fn render(&self) -> anyhow::Result<SvgChart> {
+    pub fn render(&self) -> anyhow::Result<SvgChart> {
+        ensure!(
+            self.width_to_height_ratio > Decimal::ZERO,
+            "Cannot render a chart with width less than or equal to * the height",
+        );
         ensure!(
             N != 0,
             "Cannot render a chart where values per category is 0"
@@ -192,19 +247,18 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         let value_plot_range = value_plot_max - value_plot_min;
         // figure out the total size we need
 
+        let swap_if_required = |p: Point| match self.category_location {
+            Location::Horizontal => p,
+            Location::Vertical => p.swap(),
+        };
+
         let extent = {
-            match self.category_location {
-                // column chart
-                Location::Horizontal => Point {
-                    x: Decimal::from(100),
-                    y: value_plot_range / values_proportion.remainder().0,
-                },
-                // beam char
-                Location::Vertical => Point {
-                    x: value_plot_range / values_proportion.remainder().0,
-                    y: Decimal::from(100),
-                },
-            }
+            let height = value_plot_range / values_proportion.remainder().0;
+
+            swap_if_required(Point {
+                x: self.width_to_height_ratio * height,
+                y: height,
+            })
         };
 
         let mut chart = SvgChart {
@@ -227,22 +281,26 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             .map(|x| ((self.plot_category)(&x.0.ordering), x))
             .collect::<BTreeMap<_, _>>();
 
-        let (rect_width, gutter_width, name_width) = match self.category_location {
+        let (rect_width, gutter_width, value_name_width, category_name_width) = match self
+            .category_location
+        {
             Location::Horizontal => (
                 chart.extent.x / categories_proportion.0 / Decimal::from(map.len()),
                 chart.extent.x / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
                 chart.extent.x / self.values_name_proportion.0,
+                chart.extent.y / self.categories_name_proportion.0,
             ),
             Location::Vertical => (
                 chart.extent.y / categories_proportion.0 / Decimal::from(map.len()),
                 chart.extent.y / self.categories_gutter_proportion.0 / Decimal::from(map.len() + 1),
                 chart.extent.y / self.values_name_proportion.0,
+                chart.extent.x / self.categories_name_proportion.0,
             ),
         };
 
         let rect_area_start = match self.values_name_location {
             // will be auto applied at the end due to the rects and gutters being scaled down by the required space for the names
-            LocationOrdering::Before | LocationOrdering::Both => name_width, 
+            LocationOrdering::Before | LocationOrdering::Both => value_name_width,
             LocationOrdering::After => Decimal::ZERO,
         } + gutter_width; // add one gutter, will add one more after each rect is added
         // let rect_area_end = match self.values_name_location {
@@ -251,41 +309,88 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         //     LocationOrdering::Both => todo!(),
         // };
 
+        let rect_base_start = match self.categoires_name_location {
+            LocationOrdering::Before | LocationOrdering::Both => category_name_width,
+            LocationOrdering::After => Decimal::ZERO,
+        };
+
         for (plot_idx, (plot_category, (c, v))) in map.into_iter().enumerate() {
             let category_style = (self.category_style)(&c.display, &c.ordering);
             let display_category = (self.display_category)(&c.display, &c.ordering);
             let tooltip_values = (self.tooltip_values)(&v.value);
-            let plot_vaues = (self.plot_vaues)(&v.value);
+            let plot_values = (self.plot_vaues)(&v.value);
             let plot_shape = (self.plot_shape)(&c.display, &c.ordering, &v.value, &v.extra);
 
             // calculate rect width start/end
             let rect_width_start = rect_area_start + Decimal::from(plot_idx) * rect_width;
             let rect_width_end = rect_width_start + rect_width;
 
-            let mut partial_rect = None;
-
+            let mut started_rect = None;
             for i in 0..N {
-                match (plot_shape[i], partial_rect) {
-                    (ShapeInfo::Line, _) => todo!(),
-                    (ShapeInfo::StartRect, None) => {
-                        
-                    }
-                    (ShapeInfo::EndRect, Some(start)) => {
-                    
-                    }
-                    (a, b) => {
-                        bail!("Unexpected combination {a:?} and {b:?}");
-                    }
+                let previous_shape = i.checked_sub(1).map(|ix| plot_shape[ix]);
+                let previous_plot_value = i
+                    .checked_sub(1)
+                    .map(|ix| plot_values[ix])
+                    .unwrap_or_default()
+                    + rect_base_start;
+
+                if i == N - 1
+                    && matches!(
+                        plot_shape[i],
+                        ShapeInfo::StartRect | ShapeInfo::AfterConnectedLine
+                    )
+                {
+                    bail!("nah");
                 }
-                
+                match (plot_shape[i], previous_shape, started_rect) {
+                    (ShapeInfo::Line, _, _) => {
+                        // for a line we just plot it whatever
+                        chart.lines.push(SvgLine {
+                            a: swap_if_required(Point {
+                                x: rect_width_start,
+                                y: plot_values[i],
+                            }),
+                            b: swap_if_required(Point {
+                                x: rect_width_end,
+                                y: plot_values[i],
+                            }),
+                            stroke_width: Decimal::ONE,
+                            dashes: Vec::new(),
+                            color: category_style.color.to_string(),
+                        });
+                    }
+                    (ShapeInfo::BeforeConnectedLine, Some(_), _) => {
+                        error!("TODO: BeforeConnectedLine");
+                    }
+                    (ShapeInfo::AfterConnectedLine, None, _) => {
+                        error!("TODO: AfterConnectedLine");
+                    }
+                    (ShapeInfo::AfterConnectedLine, Some(_), _) => {
+                        error!("TODO: AfterConnectedLine");
+                    }
+                    (ShapeInfo::StartRect, _, None) => {
+                        // nothing to do, added when we reach the end rect
+                        started_rect = Some(plot_values[i]);
+                    }
+                    (ShapeInfo::EndRect, _, Some(start)) if start > plot_values[i] => {
+                        bail!("Invalid end-rect before started")
+                    }
+                    (ShapeInfo::EndRect, _, Some(start)) => chart.rects.push(SvgRect {
+                        start: swap_if_required(Point {
+                            x: rect_width_start,
+                            y: start,
+                        }),
+                        size: swap_if_required(Point {
+                            x: rect_width,
+                            y: plot_values[i] - start,
+                        }),
+                        color: category_style.color.to_string(),
+                    }),
+                    (a, b, c) => {
+                        bail!("Unexpected combination {a:?} and {b:?} and started rect {c:?}");
+                    }
+                };
             }
-
-            if partial_rect.is_some() {
-                bail!("Unclosed rect");
-            }
-
-            // 
-
         }
 
         // add value lines and labels
@@ -293,14 +398,19 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         for (v, s) in &self.value_lines {
             // can render in any random order
             // make sure to chuck the text in the right place
+
+            // TODO:  later...
         }
 
         Ok(chart)
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum ShapeInfo {
     Line,
+    BeforeConnectedLine,
+    AfterConnectedLine,
     StartRect,
     EndRect,
 }
@@ -333,12 +443,23 @@ enum LineDrawingStyle {
 // another chart which is like a scatter will need to be more efficient
 // struct PointChart<P, O, I, N, T>
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Point {
     x: Decimal,
     y: Decimal,
 }
 
-struct SvgChart {
+impl Point {
+    fn swap(self) -> Point {
+        Point {
+            x: self.y,
+            y: self.x,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SvgChart {
     extent: Point,
     labels: Vec<SvgLabel>,
     rects: Vec<SvgRect>,
@@ -366,6 +487,7 @@ impl Display for SvgChart {
         f.write_str("</svg>")
     }
 }
+#[derive(Debug, Clone)]
 
 struct SvgRect {
     start: Point,
@@ -382,6 +504,8 @@ impl Display for SvgRect {
         )
     }
 }
+#[derive(Debug, Clone)]
+
 pub enum SvgTextAnchor {
     Start,
     Middle,
@@ -397,6 +521,7 @@ impl Display for SvgTextAnchor {
         }
     }
 }
+#[derive(Debug, Clone)]
 struct SvgLabel {
     a: Point,
     size: Decimal,
@@ -413,7 +538,7 @@ impl Display for SvgLabel {
         )
     }
 }
-
+#[derive(Debug, Clone)]
 struct SvgLine {
     a: Point,
     b: Point,
