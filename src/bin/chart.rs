@@ -1,7 +1,7 @@
 use std::fs;
 
 use anyhow::Context;
-use eigenchart::{Location, RectChart};
+use eigenchart::{BoxPlotRect, Location, RectChart, WaterfallRect};
 use rust_decimal::Decimal;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
             Decimal::new(80, 0),
             Decimal::new(100, 0),
         ],
-        true,
+        false,
         2,
     );
 
@@ -57,50 +57,105 @@ fn main() -> anyhow::Result<()> {
 
     fs::write("chart.svg", svg.to_string()).context("write chart")?;
 
-    // let data = [
-    //     (
-    //         "abc".to_string(),
-    //         WaterfallRect {
-    //             start: Decimal::new(20, 0),
-    //             end: Decimal::new(50, 0),
-    //         },
-    //     ),
-    //     (
-    //         "def".to_string(),
-    //         WaterfallRect {
-    //             start: Decimal::new(10, 0),
-    //             end: Decimal::new(30, 0),
-    //         },
-    //     ),
-    //     (
-    //         "ghi".to_string(),
-    //         WaterfallRect {
-    //             start: Decimal::new(30, 0),
-    //             end: Decimal::new(70, 0),
-    //         },
-    //     ),
-    //     (
-    //         "a12".to_string(),
-    //         WaterfallRect {
-    //             start: Decimal::new(16, 0),
-    //             end: Decimal::new(56, 0),
-    //         },
-    //     ),
-    //     (
-    //         "a13".to_string(),
-    //         WaterfallRect {
-    //             start: Decimal::new(70, 0),
-    //             end: Decimal::new(90, 0),
-    //         },
-    //     ),
-    // ]
-    // .into();
-    // let basic = RectChart::waterfall(&data, false);
+    let data = [
+        (
+            "abc".to_string(),
+            WaterfallRect {
+                start: Decimal::new(20, 0),
+                end: Decimal::new(50, 0),
+            },
+        ),
+        (
+            "def".to_string(),
+            WaterfallRect {
+                start: Decimal::new(10, 0),
+                end: Decimal::new(30, 0),
+            },
+        ),
+        (
+            "ghi".to_string(),
+            WaterfallRect {
+                start: Decimal::new(30, 0),
+                end: Decimal::new(70, 0),
+            },
+        ),
+        (
+            "a12".to_string(),
+            WaterfallRect {
+                start: Decimal::new(16, 0),
+                end: Decimal::new(56, 0),
+            },
+        ),
+        (
+            "a13".to_string(),
+            WaterfallRect {
+                start: Decimal::new(70, 0),
+                end: Decimal::new(90, 0),
+            },
+        ),
+    ]
+    .into();
+    let waterfall = RectChart::waterfall(&data, true);
 
-    // let mut svg = basic.render().context("render waterfall")?;
-    // svg.flip_y();
+    let mut svg = waterfall.render().context("render waterfall")?;
+    svg.flip_y();
 
-    // fs::write("waterfall.svg", svg.to_string()).context("write waterfall")?;
+    fs::write("waterfall.svg", svg.to_string()).context("write waterfall")?;
+
+
+     let data = [
+        (
+            "abc".to_string(),
+            BoxPlotRect {
+                p0: Decimal::new(10, 0),
+                p25: Decimal::new(25, 0),
+                p50: Decimal::new(35, 0),
+                p75: Decimal::new(45, 0),
+                p100: Decimal::new(70, 0),
+                mean: Decimal::new(33, 0),
+            },
+        ),
+         (
+            "def".to_string(),
+            BoxPlotRect {
+                p0: Decimal::new(10, 0),
+                p25: Decimal::new(25, 0),
+                p50: Decimal::new(35, 0),
+                p75: Decimal::new(45, 0),
+                p100: Decimal::new(70, 0),
+                mean: Decimal::new(37, 0),
+            },
+        ),
+         (
+            "ghi".to_string(),
+            BoxPlotRect {
+                p0: Decimal::new(10, 0),
+                p25: Decimal::new(25, 0),
+                p50: Decimal::new(35, 0),
+                p75: Decimal::new(45, 0),
+                p100: Decimal::new(70, 0),
+                mean: Decimal::new(41, 0),
+            },
+        ),
+
+       
+    ]
+    .into();
+    let boxplot = RectChart::boxplot(&data, true,
+         &[
+            Decimal::new(0, 0),
+            Decimal::new(20, 0),
+            Decimal::new(40, 0),
+            Decimal::new(60, 0),
+            Decimal::new(80, 0),
+        ],
+    );
+
+    let mut svg = boxplot.render().context("render boxplot")?;
+    svg.flip_y();
+
+    fs::write("boxplot.svg", svg.to_string()).context("write boxplot")?;
+
 
     Ok(())
 }

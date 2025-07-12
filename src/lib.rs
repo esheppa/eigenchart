@@ -17,6 +17,8 @@ struct Category<D, O> {
 struct Value<V, E> {
     value: V,
     extra: E,
+    info: ShapeInfo,
+    color: String,
 }
 
 impl<V, E> Value<V, E> {}
@@ -78,6 +80,10 @@ impl Display for LocationOrdering {
 // - gantt chart
 // - waterfall chart
 // - categories are rect, multirect, candlestick, boxplot, etc, etc
+// - we can also do stacked beam/column, 100% stacked beam/column here
+//
+// TODO:
+// - clustered beam/column
 
 // the amount of fields is diabolical, but is kept private.
 pub struct RectChart<D, O, V, E, const N: usize> {
@@ -93,7 +99,7 @@ pub struct RectChart<D, O, V, E, const N: usize> {
     plot_shape: [ShapeInfo; N], // if invalid, eg EndRect before start or multiple start with no end, validation will catch it
     // these don't need to be calculated dynamically as we already have all the data by now
     // don't need lines to seperate categories...
-    value_lines: Vec<(Decimal, LineStyle)>,
+    value_lines: Vec<(Value<V, E>, LineStyle)>,
 
     // where the proportion is for a dynamic number of things, it applies once
     categories_gutter_proportion: Proportion,
@@ -149,7 +155,7 @@ impl RectChart<String, usize, Decimal, (), 2> {
                 .collect(),
             category_location,
             category_style: Box::new(|_, _| RectStyle {
-                color: "red".to_string(),
+                fill: "red".to_string(),
             }),
             display_category: Box::new(|d, _| d.to_string()),
             plot_category: Box::new(|o| *o),
@@ -163,7 +169,10 @@ impl RectChart<String, usize, Decimal, (), 2> {
                 .iter()
                 .map(|d| {
                     (
-                        *d,
+                        Value {
+                            value: *d,
+                            extra: (),
+                        },
                         LineStyle {
                             color: "black".to_string(),
                             drawing: LineDrawingStyle::Dashed,
@@ -172,14 +181,15 @@ impl RectChart<String, usize, Decimal, (), 2> {
                 })
                 .collect(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
-            categories_name_proportion: Proportion(Decimal::new(22, 2)),
+            categories_name_proportion: Proportion(Decimal::new(4, 2)),
             categoires_name_location: LocationOrdering::Before,
-            values_name_proportion: Proportion(Decimal::new(7, 2)),
-            values_name_location: LocationOrdering::After,
-            categories_border_style: Some(LineStyle {
-                color: "black".to_string(),
-                drawing: LineDrawingStyle::Solid,
-            }),
+            values_name_proportion: Proportion(Decimal::new(2, 2)),
+            values_name_location: LocationOrdering::Before,
+            // categories_border_style: Some(LineStyle {
+            //     color: "black".to_string(),
+            //     drawing: LineDrawingStyle::Solid,
+            // }),
+            categories_border_style: None,
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::new(15, 1),
             debug_regions,
@@ -193,7 +203,7 @@ pub struct WaterfallRect {
     pub end: Decimal,
 }
 
-impl RectChart<String, usize, WaterfallRect, (), 2> {
+impl RectChart<String, usize, Decimal, (), 2> {
     /// Waterfall chart
     /// - always horizontal...
     pub fn waterfall(data: &BTreeMap<String, WaterfallRect>, debug_regions: bool) -> Self {
@@ -207,22 +217,130 @@ impl RectChart<String, usize, WaterfallRect, (), 2> {
                             display: c.to_string(),
                             ordering,
                         },
-                        Value {
-                            value: *v,
-                            extra: (),
-                        },
+                        [
+                            Value {
+                                value: v.start,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.end,
+                                extra: (),
+                            },
+                        ],
                     )
                 })
                 .collect(),
             category_location: Location::Horizontal,
             category_style: Box::new(|_, _| RectStyle {
-                color: "red".to_string(),
+                fill: "red".to_string(),
             }),
             display_category: Box::new(|d, _| d.to_string()),
             plot_category: Box::new(|o| *o),
-            plot_values: Box::new(|v| [v.start, v.end]),
-            plot_shape: Box::new(|_, _, _, _| [ShapeInfo::StartRect, ShapeInfo::EndRect]),
+            plot_values: Box::new(|v| *v),
+            display_value: Box::new(|_, _| String::new()),
+            plot_shape: [ShapeInfo::StartRect, ShapeInfo::EndRect],
             value_lines: Vec::new(),
+            categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
+            categories_name_proportion: Proportion(Decimal::new(4, 2)),
+            categoires_name_location: LocationOrdering::Before,
+            values_name_proportion: Proportion(Decimal::new(0, 2)),
+            values_name_location: LocationOrdering::Before,
+            categories_border_style: None,
+            _chart_title: "abc".to_string(),
+            width_to_height_ratio: Decimal::ONE,
+            debug_regions,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BoxPlotRect {
+    pub p0: Decimal,
+    pub p25: Decimal,
+    pub p50: Decimal,
+    pub p75: Decimal,
+    pub p100: Decimal,
+    pub mean: Decimal,
+}
+
+impl RectChart<String, usize, Decimal, (), 6> {
+    /// Waterfall chart
+    /// - always horizontal...
+    pub fn boxplot(
+        data: &BTreeMap<String, BoxPlotRect>,
+        debug_regions: bool,
+        lines: &[Decimal],
+    ) -> Self {
+        RectChart {
+            data: data
+                .iter()
+                .enumerate()
+                .map(|(ordering, (c, v))| {
+                    (
+                        Category {
+                            display: c.to_string(),
+                            ordering,
+                        },
+                        [
+                            Value {
+                                value: v.p0,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.p25,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.p50,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.p75,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.p100,
+                                extra: (),
+                            },
+                            Value {
+                                value: v.mean,
+                                extra: (),
+                            },
+                        ],
+                    )
+                })
+                .collect(),
+            category_location: Location::Horizontal,
+            category_style: Box::new(|_, _| RectStyle {
+                fill: "red".to_string(),
+            }),
+            display_category: Box::new(|d, _| d.to_string()),
+            plot_category: Box::new(|o| *o),
+            plot_values: Box::new(|v| *v),
+            display_value: Box::new(|_, _| String::new()),
+            plot_shape: [
+                ShapeInfo::AfterConnectedLine,
+                ShapeInfo::StartRect,
+                ShapeInfo::Line,
+                ShapeInfo::EndRect,
+                ShapeInfo::BeforeConnectedLine,
+                ShapeInfo::Line,
+            ],
+             value_lines: lines
+                .iter()
+                .map(|d| {
+                    (
+                        Value {
+                            value: *d,
+                            extra: (),
+                        },
+                        LineStyle {
+                            color: "black".to_string(),
+                            drawing: LineDrawingStyle::Dashed,
+                        },
+                    )
+                })
+                .collect(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
             categories_name_proportion: Proportion(Decimal::new(15, 2)),
             categoires_name_location: LocationOrdering::Before,
@@ -299,7 +417,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         let Some(min) = self
             .data
             .iter()
-            .filter_map(|(_, v)| (self.plot_values)(&v.value).into_iter().min())
+            .filter_map(|(_, v)| v.iter().map(|v| (self.plot_values)(&v.value)).min())
             .min()
         else {
             bail!("Cannot render a chart with empty dataset");
@@ -308,7 +426,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         let Some(max) = self
             .data
             .iter()
-            .filter_map(|(_, v)| (self.plot_values)(&v.value).into_iter().max())
+            .filter_map(|(_, v)| v.iter().map(|v| (self.plot_values)(&v.value)).max())
             .max()
         else {
             bail!("Cannot render a chart with empty dataset");
@@ -323,8 +441,16 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         // this will be used for queries proportional to the values
         let values_range = max - min;
 
-        let lines_min = self.value_lines.iter().map(|(v, _)| v).min().copied();
-        let lines_max = self.value_lines.iter().map(|(v, _)| v).max().copied();
+        let lines_min = self
+            .value_lines
+            .iter()
+            .map(|(v, _)| (self.plot_values)(&v.value))
+            .min();
+        let lines_max = self
+            .value_lines
+            .iter()
+            .map(|(v, _)| (self.plot_values)(&v.value))
+            .max();
 
         let value_plot_min = lines_min.unwrap_or(min).min(min);
         let value_plot_max = lines_max.unwrap_or(max).max(max);
@@ -375,16 +501,16 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             });
         } else {
             // TODO: remove later, useful for now
-            chart.rects.push(SvgRect {
-                start: Point {
-                    x: Decimal::ZERO,
-                    y: Decimal::ZERO,
-                },
-                size: extent,
-                color: None,
-                stroke: Some(("black".to_string(), 2)),
-                rounded: None,
-            });
+            // chart.rects.push(SvgRect {
+            //     start: Point {
+            //         x: Decimal::ZERO,
+            //         y: Decimal::ZERO,
+            //     },
+            //     size: extent,
+            //     color: None,
+            //     stroke: Some(("black".to_string(), 2)),
+            //     rounded: None,
+            // });
         }
 
         // add all rects and labels
@@ -459,6 +585,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                     rounded: None,
                 });
             }
+
             if matches!(
                 self.categoires_name_location,
                 LocationOrdering::After | LocationOrdering::Both
@@ -545,8 +672,6 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         for (plot_idx, (_plot_category, (c, v))) in map.into_iter().enumerate() {
             let category_style = (self.category_style)(&c.display, &c.ordering);
             let display_category = (self.display_category)(&c.display, &c.ordering);
-            let plot_values = (self.plot_values)(&v.value);
-            let plot_shape = (self.plot_shape)(&c.display, &c.ordering, &v.value, &v.extra);
 
             // calculate rect width start/end
             let rect_width_start =
@@ -554,27 +679,30 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             let rect_width_end = rect_width_start + rect_width;
 
             info!(
-                "category_style={category_style:?} display_category={display_category} plot_values={plot_values:?} plot_shape={plot_shape:?} rect_width_start={rect_width_start} rect_width_end={rect_width_end}"
+                "category_style={category_style:?} display_category={display_category} rect_width_start={rect_width_start} rect_width_end={rect_width_end}"
             );
 
             let mut started_rect = None;
-            for i in 0..N {
-                let previous_shape = i.checked_sub(1).map(|ix| plot_shape[ix]);
+            for (i, value) in v.iter().enumerate() {
+                let plot_value = (self.plot_values)(&value.value);
+                let plot_shape = self.plot_shape[i];
+
+                let previous_shape = i.checked_sub(1).map(|ix| self.plot_shape[ix]);
                 let _previous_plot_value = i
                     .checked_sub(1)
-                    .map(|ix| plot_values[ix])
+                    .map(|ix| (self.plot_values)(&v[ix].value))
                     .unwrap_or_default()
                     + rect_base_start;
 
                 if i == N - 1
                     && matches!(
-                        plot_shape[i],
+                        plot_shape,
                         ShapeInfo::StartRect | ShapeInfo::AfterConnectedLine
                     )
                 {
                     bail!("nah");
                 }
-                let plot_value = plot_values[i] - value_plot_min;
+                let plot_value = plot_value - value_plot_min;
 
                 if matches!(
                     self.categoires_name_location,
@@ -589,7 +717,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                         anchor: SvgTextAnchor::Middle,
                         direction: 0,
                         content: display_category.to_string(),
-                        text_length: Some(rect_width),
+                        text_length: None,
                     });
                 }
 
@@ -611,16 +739,16 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                     });
                 }
 
-                match (plot_shape[i], previous_shape, started_rect) {
+                match (plot_shape, previous_shape, started_rect) {
                     (ShapeInfo::Line, _, _) => {
                         // for a line we just plot it whatever
                         let line_a = swap_if_required(Point {
                             x: rect_width_start * self.width_to_height_ratio,
-                            y: plot_value * scaling_factor,
+                            y: rect_base_start + plot_value * scaling_factor,
                         });
                         let line_b = swap_if_required(Point {
                             x: rect_width_end * self.width_to_height_ratio,
-                            y: plot_value * scaling_factor,
+                            y: rect_base_start + plot_value * scaling_factor,
                         });
                         info!("Pushing line {line_a} to {line_b}");
                         chart.lines.push(SvgLine {
@@ -628,17 +756,65 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             b: line_b,
                             stroke_width: Decimal::ONE,
                             dashes: Vec::new(),
-                            color: category_style.color.to_string(),
+                            color: "black".to_string(), // category_style.color.to_string(),
                         });
                     }
                     (ShapeInfo::BeforeConnectedLine, Some(_), _) => {
                         error!("TODO: BeforeConnectedLine");
+                        let line_a = swap_if_required(Point {
+                            x: rect_width_start * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        let line_b = swap_if_required(Point {
+                            x: rect_width_end * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        info!("Pushing line {line_a} to {line_b}");
+                        chart.lines.push(SvgLine {
+                            a: line_a,
+                            b: line_b,
+                            stroke_width: Decimal::ONE,
+                            dashes: Vec::new(),
+                            color: "black".to_string(), // category_style.color.to_string(),
+                        });
                     }
                     (ShapeInfo::AfterConnectedLine, None, _) => {
                         error!("TODO: AfterConnectedLine");
+                        let line_a = swap_if_required(Point {
+                            x: rect_width_start * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        let line_b = swap_if_required(Point {
+                            x: rect_width_end * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        info!("Pushing line {line_a} to {line_b}");
+                        chart.lines.push(SvgLine {
+                            a: line_a,
+                            b: line_b,
+                            stroke_width: Decimal::ONE,
+                            dashes: Vec::new(),
+                            color: "black".to_string(), // category_style.color.to_string(),
+                        });
                     }
                     (ShapeInfo::AfterConnectedLine, Some(_), _) => {
                         error!("TODO: AfterConnectedLine");
+                        let line_a = swap_if_required(Point {
+                            x: rect_width_start * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        let line_b = swap_if_required(Point {
+                            x: rect_width_end * self.width_to_height_ratio,
+                            y: rect_base_start + plot_value * scaling_factor,
+                        });
+                        info!("Pushing line {line_a} to {line_b}");
+                        chart.lines.push(SvgLine {
+                            a: line_a,
+                            b: line_b,
+                            stroke_width: Decimal::ONE,
+                            dashes: Vec::new(),
+                            color: "black".to_string(), // category_style.color.to_string(),
+                        });
                     }
                     (ShapeInfo::StartRect, _, None) => {
                         // nothing to do, added when we reach the end rect
@@ -661,7 +837,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             start,
                             size,
 
-                            color: Some(category_style.color.to_string()),
+                            color: Some(category_style.fill.to_string()),
                             stroke: None,
                             rounded: Some(2),
                         })
@@ -674,33 +850,23 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         }
 
         if let Some(s) = &self.categories_border_style {
+            let x = match self.values_name_location {
+                LocationOrdering::Before | LocationOrdering::Both => value_name_width,
+                LocationOrdering::After => Decimal::ZERO,
+            };
+            let ymin = scaling_factor * value_plot_min
+                + match self.categoires_name_location {
+                    LocationOrdering::Before | LocationOrdering::Both => category_name_width,
+                    LocationOrdering::After => Decimal::ZERO,
+                };
+            let ymax = scaling_factor * value_plot_max
+                + match self.categoires_name_location {
+                    LocationOrdering::Before | LocationOrdering::Both => category_name_width,
+                    LocationOrdering::After => Decimal::ZERO,
+                };
             chart.lines.push(SvgLine {
-                a: swap_if_required(Point {
-                    x: match self.values_name_location {
-                        LocationOrdering::Before | LocationOrdering::Both => value_name_width,
-                        LocationOrdering::After => Decimal::ZERO,
-                    },
-                    y: scaling_factor * value_plot_min
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
-                }),
-                b: swap_if_required(Point {
-                    x: match self.values_name_location {
-                        LocationOrdering::After | LocationOrdering::Both => value_name_width,
-                        LocationOrdering::Before => Decimal::ZERO,
-                    },
-                    y: scaling_factor * value_plot_max
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
-                }),
+                a: swap_if_required(Point { x, y: ymin }),
+                b: swap_if_required(Point { x, y: ymax }),
                 stroke_width: Decimal::ONE,
                 dashes: match s.drawing {
                     LineDrawingStyle::Solid => Vec::new(),
@@ -710,34 +876,18 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                 },
                 color: s.color.to_string(),
             });
+            let x = match self.values_name_location {
+                LocationOrdering::After | LocationOrdering::Both => value_name_width,
+                LocationOrdering::Before => Decimal::ZERO,
+            };
             chart.lines.push(SvgLine {
                 a: swap_if_required(Point {
-                    x: swap_if_required(chart.extent).x
-                        - match self.values_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => value_name_width,
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
-                    y: scaling_factor * value_plot_min
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
+                    x: swap_if_required(chart.extent).x - x,
+                    y: ymin,
                 }),
                 b: swap_if_required(Point {
-                    x: swap_if_required(chart.extent).x
-                        - match self.values_name_location {
-                            LocationOrdering::After | LocationOrdering::Both => value_name_width,
-                            LocationOrdering::Before => Decimal::ZERO,
-                        },
-                    y: scaling_factor * value_plot_max
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
+                    x: swap_if_required(chart.extent).x - x,
+                    y: ymax,
                 }),
                 stroke_width: Decimal::ONE,
                 dashes: match s.drawing {
@@ -759,19 +909,19 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
 
             // full width of the chart area
             // starts from the rect start
+
+            let y = scaling_factor * ((self.plot_values)(&v.value) - value_plot_min)
+                + match self.categoires_name_location {
+                    LocationOrdering::Before | LocationOrdering::Both => category_name_width,
+                    LocationOrdering::After => Decimal::ZERO,
+                };
             chart.lines.push(SvgLine {
                 a: swap_if_required(Point {
                     x: match self.values_name_location {
                         LocationOrdering::Before | LocationOrdering::Both => value_name_width,
                         LocationOrdering::After => Decimal::ZERO,
                     },
-                    y: scaling_factor * (v - value_plot_min)
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
+                    y,
                 }),
                 b: swap_if_required(Point {
                     x: swap_if_required(chart.extent).x
@@ -779,13 +929,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             LocationOrdering::After | LocationOrdering::Both => value_name_width,
                             LocationOrdering::Before => Decimal::ZERO,
                         },
-                    y: scaling_factor * (v - value_plot_min)
-                        + match self.categoires_name_location {
-                            LocationOrdering::Before | LocationOrdering::Both => {
-                                category_name_width
-                            }
-                            LocationOrdering::After => Decimal::ZERO,
-                        },
+                    y,
                 }),
                 stroke_width: Decimal::ONE,
                 dashes: match s.drawing {
@@ -800,25 +944,68 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             if matches!(
                 self.values_name_location,
                 LocationOrdering::Before | LocationOrdering::Both
-            ) {}
+            ) {
+                chart.labels.push(SvgLabel {
+                    a: swap_if_required(Point {
+                        x: Decimal::ZERO + value_name_width * Decimal::new(9, 1),
+                        y: y - Decimal::new(3, 0),
+                    }),
+                    size: Decimal::new(12, 0),
+                    anchor: SvgTextAnchor::End,
+                    direction: 0,
+                    content: (self.display_value)(&v.value, &v.extra),
+                    text_length: None,
+                });
+            }
 
             if matches!(
                 self.values_name_location,
                 LocationOrdering::After | LocationOrdering::Both
-            ) {}
+            ) {
+                chart.labels.push(SvgLabel {
+                    a: swap_if_required(Point {
+                        x: swap_if_required(chart.extent).x - value_name_width * Decimal::new(9, 1),
+                        y: y - Decimal::new(3, 0),
+                    }),
+                    size: Decimal::new(12, 0),
+                    anchor: SvgTextAnchor::Start,
+                    direction: 0,
+                    content: (self.display_value)(&v.value, &v.extra),
+                    text_length: None,
+                });
+            }
         }
+
+        let pad = Decimal::new(25, 0);
+
+        chart.extent = chart.extent.translate(Point { x: pad, y: pad });
+        chart.translate(Point {
+            x: pad / Decimal::TWO,
+            y: pad / Decimal::TWO,
+        });
+
+        chart.rects.push(SvgRect {
+            start: Point {
+                x: Decimal::ZERO,
+                y: Decimal::ZERO,
+            },
+            size: chart.extent,
+            color: None,
+            stroke: Some(("green".to_string(), 2)),
+            rounded: None,
+        });
 
         Ok(chart)
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ShapeInfo {
-    Line,
-    BeforeConnectedLine,
-    AfterConnectedLine,
-    StartRect,
-    EndRect,
+    Line(LineStyle),
+    BeforeConnectedLine { plot: LineStyle, connector: LineStyle },
+    AfterConnectedLine { plot: LineStyle, connector: LineStyle },
+    StartRect(RectStyle),
+    EndRect(RectStyle),
 }
 
 // struct TextStyle {
@@ -827,15 +1014,16 @@ pub enum ShapeInfo {
 //     // size? proportional?
 // }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct RectStyle {
-    color: String,
+    fill: String,
     // later shading, gradients
     // border, fill, etc
     // corner radius :)
     // SHADOW??? :(
 }
 
+#[derive(Clone, Debug)]
 struct LineStyle {
     color: String,
     drawing: LineDrawingStyle,
@@ -864,6 +1052,12 @@ impl Display for Point {
 }
 
 impl Point {
+    fn translate(self, c: Point) -> Point {
+        Point {
+            x: self.x + c.x,
+            y: self.y + c.y,
+        }
+    }
     fn swap(self) -> Point {
         Point {
             x: self.y,
@@ -881,6 +1075,18 @@ pub struct SvgChart {
 }
 
 impl SvgChart {
+    fn translate(&mut self, c: Point) {
+        for label in &mut self.labels {
+            label.translate(c);
+        }
+        for rect in &mut self.rects {
+            rect.translate(c);
+        }
+        for line in &mut self.lines {
+            line.translate(c);
+        }
+    }
+
     pub fn flip_y(&mut self) {
         for label in &mut self.labels {
             label.flip_y(self.extent);
@@ -927,8 +1133,8 @@ impl Display for SvgChart {
         f.write_str("</svg>")
     }
 }
-#[derive(Debug, Clone)]
 
+#[derive(Debug, Clone)]
 struct SvgRect {
     start: Point,
     size: Point,
@@ -938,6 +1144,9 @@ struct SvgRect {
 }
 
 impl SvgRect {
+    fn translate(&mut self, c: Point) {
+        self.start = self.start.translate(c);
+    }
     fn swap(&mut self) {
         self.start = self.start.swap();
         self.size = self.size.swap();
@@ -1002,6 +1211,9 @@ struct SvgLabel {
 }
 
 impl SvgLabel {
+    fn translate(&mut self, c: Point) {
+        self.a = self.a.translate(c);
+    }
     fn swap(&mut self) {
         self.a = self.a.swap();
     }
@@ -1037,6 +1249,10 @@ struct SvgLine {
 }
 
 impl SvgLine {
+    fn translate(&mut self, c: Point) {
+        self.a = self.a.translate(c);
+        self.b = self.b.translate(c);
+    }
     fn swap(&mut self) {
         self.a = self.a.swap();
         self.b = self.b.swap();
