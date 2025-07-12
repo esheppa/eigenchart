@@ -102,8 +102,7 @@ fn main() -> anyhow::Result<()> {
 
     fs::write("waterfall.svg", svg.to_string()).context("write waterfall")?;
 
-
-     let data = [
+    let data = [
         (
             "abc".to_string(),
             BoxPlotRect {
@@ -115,34 +114,34 @@ fn main() -> anyhow::Result<()> {
                 mean: Decimal::new(33, 0),
             },
         ),
-         (
+        (
             "def".to_string(),
             BoxPlotRect {
                 p0: Decimal::new(10, 0),
-                p25: Decimal::new(25, 0),
+                p25: Decimal::new(17, 0),
                 p50: Decimal::new(35, 0),
-                p75: Decimal::new(45, 0),
-                p100: Decimal::new(70, 0),
+                p75: Decimal::new(42, 0),
+                p100: Decimal::new(78, 0),
                 mean: Decimal::new(37, 0),
             },
         ),
-         (
+        (
             "ghi".to_string(),
             BoxPlotRect {
-                p0: Decimal::new(10, 0),
-                p25: Decimal::new(25, 0),
+                p0: Decimal::new(6, 0),
+                p25: Decimal::new(30, 0),
                 p50: Decimal::new(35, 0),
-                p75: Decimal::new(45, 0),
-                p100: Decimal::new(70, 0),
+                p75: Decimal::new(55, 0),
+                p100: Decimal::new(65, 0),
                 mean: Decimal::new(41, 0),
             },
         ),
-
-       
     ]
     .into();
-    let boxplot = RectChart::boxplot(&data, true,
-         &[
+    let boxplot = RectChart::boxplot(
+        &data,
+        true,
+        &[
             Decimal::new(0, 0),
             Decimal::new(20, 0),
             Decimal::new(40, 0),
@@ -155,7 +154,6 @@ fn main() -> anyhow::Result<()> {
     svg.flip_y();
 
     fs::write("boxplot.svg", svg.to_string()).context("write boxplot")?;
-
 
     Ok(())
 }

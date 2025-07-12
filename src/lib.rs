@@ -18,7 +18,6 @@ struct Value<V, E> {
     value: V,
     extra: E,
     info: ShapeInfo,
-    color: String,
 }
 
 impl<V, E> Value<V, E> {}
@@ -86,20 +85,19 @@ impl Display for LocationOrdering {
 // - clustered beam/column
 
 // the amount of fields is diabolical, but is kept private.
-pub struct RectChart<D, O, V, E, const N: usize> {
-    data: Vec<(Category<D, O>, [Value<V, E>; N])>,
+pub struct RectChart<D, O, V, E> {
+    data: Vec<(Category<D, O>, Vec<Value<V, E>>)>,
     // _tooltip: Box<dyn Fn(D, O, V, E) -> String>,
     category_location: Location,
-    category_style: Box<dyn Fn(&D, &O) -> RectStyle>,
+    // category_style: Box<dyn Fn(&D, &O) -> RectStyle>,
     display_category: Box<dyn Fn(&D, &O) -> String>,
     plot_category: Box<dyn Fn(&O) -> usize>,
     // tooltip_values: Box<dyn Fn(&V, &E) -> String>,
     plot_values: Box<dyn Fn(&V) -> Decimal>,
     display_value: Box<dyn Fn(&V, &E) -> String>,
-    plot_shape: [ShapeInfo; N], // if invalid, eg EndRect before start or multiple start with no end, validation will catch it
     // these don't need to be calculated dynamically as we already have all the data by now
     // don't need lines to seperate categories...
-    value_lines: Vec<(Value<V, E>, LineStyle)>,
+    value_lines: Vec<((V, E), LineStyle)>,
 
     // where the proportion is for a dynamic number of things, it applies once
     categories_gutter_proportion: Proportion,
@@ -120,9 +118,9 @@ pub struct RectChart<D, O, V, E, const N: usize> {
     debug_regions: bool,
 }
 
-impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {}
+impl<D, O, V, E> RectChart<D, O, V, E> {}
 
-impl RectChart<String, usize, Decimal, (), 2> {
+impl RectChart<String, usize, Decimal, ()> {
     pub fn basic(
         data: &BTreeMap<String, Decimal>,
         category_location: Location,
@@ -144,19 +142,24 @@ impl RectChart<String, usize, Decimal, (), 2> {
                             Value {
                                 value: Decimal::ZERO,
                                 extra: (),
+                                info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: *v,
                                 extra: (),
+                                info: ShapeInfo::EndRect(RectStyle {
+                                    fill: "red".to_string(),
+                                    stroke: None,
+                                    radius: Some(Decimal::new(2, 0)),
+                                }),
                             },
-                        ],
+                        ]
+                        .into(),
                     )
                 })
                 .collect(),
             category_location,
-            category_style: Box::new(|_, _| RectStyle {
-                fill: "red".to_string(),
-            }),
+
             display_category: Box::new(|d, _| d.to_string()),
             plot_category: Box::new(|o| *o),
             display_value: Box::new(move |v, _| {
@@ -164,15 +167,11 @@ impl RectChart<String, usize, Decimal, (), 2> {
                     .to_string()
             }),
             plot_values: Box::new(|v| *v),
-            plot_shape: [ShapeInfo::StartRect, ShapeInfo::EndRect],
             value_lines: lines
                 .iter()
                 .map(|d| {
                     (
-                        Value {
-                            value: *d,
-                            extra: (),
-                        },
+                        (*d, ()),
                         LineStyle {
                             color: "black".to_string(),
                             drawing: LineDrawingStyle::Dashed,
@@ -203,7 +202,7 @@ pub struct WaterfallRect {
     pub end: Decimal,
 }
 
-impl RectChart<String, usize, Decimal, (), 2> {
+impl RectChart<String, usize, Decimal, ()> {
     /// Waterfall chart
     /// - always horizontal...
     pub fn waterfall(data: &BTreeMap<String, WaterfallRect>, debug_regions: bool) -> Self {
@@ -221,24 +220,27 @@ impl RectChart<String, usize, Decimal, (), 2> {
                             Value {
                                 value: v.start,
                                 extra: (),
+                                info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: v.end,
                                 extra: (),
+                                info: ShapeInfo::EndRect(RectStyle {
+                                    fill: "red".to_string(),
+                                    stroke: None,
+                                    radius: Some(Decimal::new(2, 0)),
+                                }),
                             },
-                        ],
+                        ]
+                        .into(),
                     )
                 })
                 .collect(),
             category_location: Location::Horizontal,
-            category_style: Box::new(|_, _| RectStyle {
-                fill: "red".to_string(),
-            }),
             display_category: Box::new(|d, _| d.to_string()),
             plot_category: Box::new(|o| *o),
             plot_values: Box::new(|v| *v),
             display_value: Box::new(|_, _| String::new()),
-            plot_shape: [ShapeInfo::StartRect, ShapeInfo::EndRect],
             value_lines: Vec::new(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
             categories_name_proportion: Proportion(Decimal::new(4, 2)),
@@ -263,7 +265,7 @@ pub struct BoxPlotRect {
     pub mean: Decimal,
 }
 
-impl RectChart<String, usize, Decimal, (), 6> {
+impl RectChart<String, usize, Decimal, ()> {
     /// Waterfall chart
     /// - always horizontal...
     pub fn boxplot(
@@ -285,55 +287,77 @@ impl RectChart<String, usize, Decimal, (), 6> {
                             Value {
                                 value: v.p0,
                                 extra: (),
+                                info: ShapeInfo::AfterConnectedLine {
+                                    plot: LineStyle {
+                                        color: "black".to_string(),
+                                        drawing: LineDrawingStyle::Solid,
+                                    },
+                                    connector: LineStyle {
+                                        color: "black".to_string(),
+                                        drawing: LineDrawingStyle::Dotted,
+                                    },
+                                },
                             },
                             Value {
                                 value: v.p25,
                                 extra: (),
+                                info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: v.p50,
                                 extra: (),
+                                info: ShapeInfo::Line(LineStyle {
+                                    color: "black".to_string(),
+                                    drawing: LineDrawingStyle::Solid,
+                                }),
                             },
                             Value {
                                 value: v.p75,
                                 extra: (),
+                                info: ShapeInfo::EndRect(RectStyle {
+                                    fill: "red".to_string(),
+                                    stroke: None,
+                                    radius: Some(Decimal::new(2, 0)),
+                                }),
                             },
                             Value {
                                 value: v.p100,
                                 extra: (),
+                                info: ShapeInfo::BeforeConnectedLine {
+                                    plot: LineStyle {
+                                        color: "black".to_string(),
+                                        drawing: LineDrawingStyle::Solid,
+                                    },
+                                    connector: LineStyle {
+                                        color: "black".to_string(),
+                                        drawing: LineDrawingStyle::Dotted,
+                                    },
+                                },
                             },
                             Value {
                                 value: v.mean,
                                 extra: (),
+                                info: ShapeInfo::Line(LineStyle {
+                                    color: "black".to_string(),
+                                    drawing: LineDrawingStyle::Dotted,
+                                }),
                             },
-                        ],
+                        ]
+                        .into(),
                     )
                 })
                 .collect(),
             category_location: Location::Horizontal,
-            category_style: Box::new(|_, _| RectStyle {
-                fill: "red".to_string(),
-            }),
+
             display_category: Box::new(|d, _| d.to_string()),
             plot_category: Box::new(|o| *o),
             plot_values: Box::new(|v| *v),
             display_value: Box::new(|_, _| String::new()),
-            plot_shape: [
-                ShapeInfo::AfterConnectedLine,
-                ShapeInfo::StartRect,
-                ShapeInfo::Line,
-                ShapeInfo::EndRect,
-                ShapeInfo::BeforeConnectedLine,
-                ShapeInfo::Line,
-            ],
-             value_lines: lines
+            value_lines: lines
                 .iter()
                 .map(|d| {
                     (
-                        Value {
-                            value: *d,
-                            extra: (),
-                        },
+                        (*d, ()),
                         LineStyle {
                             color: "black".to_string(),
                             drawing: LineDrawingStyle::Dashed,
@@ -378,15 +402,11 @@ impl Proportion {
     // const ONE: Proportion = Proportion(Decimal::ONE);
 }
 
-impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
+impl<D, O, V, E> RectChart<D, O, V, E> {
     pub fn render(&self) -> anyhow::Result<SvgChart> {
         ensure!(
             self.width_to_height_ratio > Decimal::ZERO,
             "Cannot render a chart with width less than or equal to * the height",
-        );
-        ensure!(
-            N != 0,
-            "Cannot render a chart where values per category is 0"
         );
 
         let categories_proportion = Proportion::new(
@@ -444,12 +464,12 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         let lines_min = self
             .value_lines
             .iter()
-            .map(|(v, _)| (self.plot_values)(&v.value))
+            .map(|((val, ext), _)| (self.plot_values)(&val))
             .min();
         let lines_max = self
             .value_lines
             .iter()
-            .map(|(v, _)| (self.plot_values)(&v.value))
+            .map(|((val, ext), _)| (self.plot_values)(&val))
             .max();
 
         let value_plot_min = lines_min.unwrap_or(min).min(min);
@@ -670,7 +690,6 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
         }
 
         for (plot_idx, (_plot_category, (c, v))) in map.into_iter().enumerate() {
-            let category_style = (self.category_style)(&c.display, &c.ordering);
             let display_category = (self.display_category)(&c.display, &c.ordering);
 
             // calculate rect width start/end
@@ -679,25 +698,27 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             let rect_width_end = rect_width_start + rect_width;
 
             info!(
-                "category_style={category_style:?} display_category={display_category} rect_width_start={rect_width_start} rect_width_end={rect_width_end}"
+                "display_category={display_category} rect_width_start={rect_width_start} rect_width_end={rect_width_end}"
             );
 
             let mut started_rect = None;
             for (i, value) in v.iter().enumerate() {
                 let plot_value = (self.plot_values)(&value.value);
-                let plot_shape = self.plot_shape[i];
+                let plot_shape = value.info.clone();
 
-                let previous_shape = i.checked_sub(1).map(|ix| self.plot_shape[ix]);
+                let previous_shape = i
+                    .checked_sub(1)
+                    .and_then(|ix| Some(v.get(ix)?.info.clone()));
                 let _previous_plot_value = i
                     .checked_sub(1)
                     .map(|ix| (self.plot_values)(&v[ix].value))
                     .unwrap_or_default()
                     + rect_base_start;
 
-                if i == N - 1
+                if i == v.len().checked_sub(1).unwrap_or_default()
                     && matches!(
                         plot_shape,
-                        ShapeInfo::StartRect | ShapeInfo::AfterConnectedLine
+                        ShapeInfo::StartRect | ShapeInfo::AfterConnectedLine { .. }
                     )
                 {
                     bail!("nah");
@@ -740,7 +761,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                 }
 
                 match (plot_shape, previous_shape, started_rect) {
-                    (ShapeInfo::Line, _, _) => {
+                    (ShapeInfo::Line(category_style), _, _) => {
                         // for a line we just plot it whatever
                         let line_a = swap_if_required(Point {
                             x: rect_width_start * self.width_to_height_ratio,
@@ -759,7 +780,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             color: "black".to_string(), // category_style.color.to_string(),
                         });
                     }
-                    (ShapeInfo::BeforeConnectedLine, Some(_), _) => {
+                    (ShapeInfo::BeforeConnectedLine { plot, connector }, Some(_), _) => {
                         error!("TODO: BeforeConnectedLine");
                         let line_a = swap_if_required(Point {
                             x: rect_width_start * self.width_to_height_ratio,
@@ -778,7 +799,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             color: "black".to_string(), // category_style.color.to_string(),
                         });
                     }
-                    (ShapeInfo::AfterConnectedLine, None, _) => {
+                    (ShapeInfo::AfterConnectedLine { plot, connector }, None, _) => {
                         error!("TODO: AfterConnectedLine");
                         let line_a = swap_if_required(Point {
                             x: rect_width_start * self.width_to_height_ratio,
@@ -797,7 +818,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                             color: "black".to_string(), // category_style.color.to_string(),
                         });
                     }
-                    (ShapeInfo::AfterConnectedLine, Some(_), _) => {
+                    (ShapeInfo::AfterConnectedLine { plot, connector }, Some(_), _) => {
                         error!("TODO: AfterConnectedLine");
                         let line_a = swap_if_required(Point {
                             x: rect_width_start * self.width_to_height_ratio,
@@ -820,10 +841,10 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                         // nothing to do, added when we reach the end rect
                         started_rect = Some(plot_value);
                     }
-                    (ShapeInfo::EndRect, _, Some(start)) if start > plot_value => {
+                    (ShapeInfo::EndRect(category_style), _, Some(start)) if start > plot_value => {
                         bail!("Invalid end-rect before started")
                     }
-                    (ShapeInfo::EndRect, _, Some(start_value)) => {
+                    (ShapeInfo::EndRect(category_style), _, Some(start_value)) => {
                         let start = swap_if_required(Point {
                             x: rect_width_start, // * self.width_to_height_ratio,
                             y: rect_base_start + start_value * scaling_factor,
@@ -910,7 +931,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
             // full width of the chart area
             // starts from the rect start
 
-            let y = scaling_factor * ((self.plot_values)(&v.value) - value_plot_min)
+            let y = scaling_factor * ((self.plot_values)(&v.0) - value_plot_min)
                 + match self.categoires_name_location {
                     LocationOrdering::Before | LocationOrdering::Both => category_name_width,
                     LocationOrdering::After => Decimal::ZERO,
@@ -953,7 +974,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                     size: Decimal::new(12, 0),
                     anchor: SvgTextAnchor::End,
                     direction: 0,
-                    content: (self.display_value)(&v.value, &v.extra),
+                    content: (self.display_value)(&v.0, &v.1),
                     text_length: None,
                 });
             }
@@ -970,7 +991,7 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
                     size: Decimal::new(12, 0),
                     anchor: SvgTextAnchor::Start,
                     direction: 0,
-                    content: (self.display_value)(&v.value, &v.extra),
+                    content: (self.display_value)(&v.0, &v.1),
                     text_length: None,
                 });
             }
@@ -1002,9 +1023,15 @@ impl<D, O, V, E, const N: usize> RectChart<D, O, V, E, N> {
 #[derive(Debug, Clone)]
 pub enum ShapeInfo {
     Line(LineStyle),
-    BeforeConnectedLine { plot: LineStyle, connector: LineStyle },
-    AfterConnectedLine { plot: LineStyle, connector: LineStyle },
-    StartRect(RectStyle),
+    BeforeConnectedLine {
+        plot: LineStyle,
+        connector: LineStyle,
+    },
+    AfterConnectedLine {
+        plot: LineStyle,
+        connector: LineStyle,
+    },
+    StartRect, // style determined by the end... maybe should be in the start only?
     EndRect(RectStyle),
 }
 
@@ -1017,6 +1044,8 @@ pub enum ShapeInfo {
 #[derive(Clone, Debug)]
 struct RectStyle {
     fill: String,
+    stroke: Option<(String, usize)>,
+    radius: Option<Decimal>,
     // later shading, gradients
     // border, fill, etc
     // corner radius :)
@@ -1029,6 +1058,7 @@ struct LineStyle {
     drawing: LineDrawingStyle,
 }
 
+#[derive(Clone, Debug)]
 pub enum LineDrawingStyle {
     Solid,
     Dashed,
