@@ -4,23 +4,17 @@ use std::{
 };
 
 use anyhow::{Context, bail, ensure};
+use chrono::NaiveDate;
 use rust_decimal::{Decimal, RoundingStrategy::MidpointAwayFromZero};
 use tracing::{error, info};
 
 // mod svg;
 
-struct Category<D, O> {
-    display: D,
-    ordering: O,
-}
-
-struct Value<V, E> {
+struct Value<V> {
     value: V,
-    extra: E,
     info: ShapeInfo,
 }
 
-impl<V, E> Value<V, E> {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Location {
@@ -85,19 +79,19 @@ impl Display for LocationOrdering {
 // - clustered beam/column
 
 // the amount of fields is diabolical, but is kept private.
-pub struct RectChart<D, O, V, E> {
-    data: Vec<(Category<D, O>, Vec<Value<V, E>>)>,
+pub struct RectChart<C, V> {
+    data: Vec<(C, Vec<Value<V>>)>,
     // _tooltip: Box<dyn Fn(D, O, V, E) -> String>,
     category_location: Location,
     // category_style: Box<dyn Fn(&D, &O) -> RectStyle>,
-    display_category: Box<dyn Fn(&D, &O) -> String>,
-    plot_category: Box<dyn Fn(&O) -> usize>,
+    display_category: Box<dyn Fn(&C) -> String>,
+    plot_category: Box<dyn Fn(&C) -> usize>,
     // tooltip_values: Box<dyn Fn(&V, &E) -> String>,
     plot_values: Box<dyn Fn(&V) -> Decimal>,
-    display_value: Box<dyn Fn(&V, &E) -> String>,
+    display_value: Box<dyn Fn(&V) -> String>,
     // these don't need to be calculated dynamically as we already have all the data by now
     // don't need lines to seperate categories...
-    value_lines: Vec<((V, E), LineStyle)>,
+    value_lines: Vec<(V, LineStyle)>,
 
     // where the proportion is for a dynamic number of things, it applies once
     categories_gutter_proportion: Proportion,
@@ -118,9 +112,80 @@ pub struct RectChart<D, O, V, E> {
     debug_regions: bool,
 }
 
-impl<D, O, V, E> RectChart<D, O, V, E> {}
+#[derive(Debug, Clone, Copy)]
+pub struct WaterfallRect {
+    pub start: Decimal,
+    pub end: Decimal,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct BoxPlotRect {
+    pub p0: Decimal,
+    pub p25: Decimal,
+    pub p50: Decimal,
+    pub p75: Decimal,
+    pub p100: Decimal,
+    pub mean: Decimal,
+}
 
-impl RectChart<String, usize, Decimal, ()> {
+impl<C, V> RectChart<C, V> {}
+
+#[derive(Debug, Clone)]
+pub struct OrderedCategory {
+    pub display: String,
+    pub ordering: usize,
+}
+
+pub struct Process {
+    start: NaiveDate,
+    end: NaiveDate,
+}
+impl RectChart<OrderedCategory, NaiveDate> {
+    /// Waterfall chart
+    /// - always horizontal...
+    pub fn gantt(data: &BTreeMap<OrderedCategory, Process>, debug_regions: bool) -> Self {
+        RectChart {
+            data: data.iter()
+                .map(|(c, v)| {
+                    (
+                        c.clone(),
+                        [
+                            Value {
+                                value: v.start,
+                                info: ShapeInfo::StartRect,
+                            },
+                            Value {
+                                value: v.end,
+                                info: ShapeInfo::EndRect(RectStyle {
+                                    fill: "red".to_string(),
+                                    stroke: None,
+                                    radius: Some(Decimal::new(2, 0)),
+                                }),
+                            },
+                        ]
+                        .into(),
+                    )
+                })
+                .collect(),
+            category_location: Location::Horizontal,
+            display_category: Box::new(|d| d.display.to_string()),
+            plot_category: Box::new(|o| o.ordering),
+            plot_values: Box::new(|v| *v),
+            display_value: Box::new(|_| String::new()),
+            value_lines: Vec::new(),
+            categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
+            categories_name_proportion: Proportion(Decimal::new(4, 2)),
+            categoires_name_location: LocationOrdering::Before,
+            values_name_proportion: Proportion(Decimal::new(0, 2)),
+            values_name_location: LocationOrdering::Before,
+            categories_border_style: None,
+            _chart_title: "abc".to_string(),
+            width_to_height_ratio: Decimal::ONE,
+            debug_regions,
+        }
+    }
+}
+
+impl RectChart<OrderedCategory, Decimal> {
     pub fn basic(
         data: &BTreeMap<String, Decimal>,
         category_location: Location,
@@ -134,19 +199,17 @@ impl RectChart<String, usize, Decimal, ()> {
                 .enumerate()
                 .map(|(ordering, (c, v))| {
                     (
-                        Category {
+                        OrderedCategory {
                             display: c.to_string(),
                             ordering,
                         },
                         [
                             Value {
                                 value: Decimal::ZERO,
-                                extra: (),
                                 info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: *v,
-                                extra: (),
                                 info: ShapeInfo::EndRect(RectStyle {
                                     fill: "red".to_string(),
                                     stroke: None,
@@ -160,9 +223,9 @@ impl RectChart<String, usize, Decimal, ()> {
                 .collect(),
             category_location,
 
-            display_category: Box::new(|d, _| d.to_string()),
-            plot_category: Box::new(|o| *o),
-            display_value: Box::new(move |v, _| {
+            display_category: Box::new(|d| d.display.to_string()),
+            plot_category: Box::new(|o| o.ordering),
+            display_value: Box::new(move |v| {
                 v.round_dp_with_strategy(decimal_places, MidpointAwayFromZero)
                     .to_string()
             }),
@@ -171,7 +234,7 @@ impl RectChart<String, usize, Decimal, ()> {
                 .iter()
                 .map(|d| {
                     (
-                        (*d, ()),
+                        *d,
                         LineStyle {
                             color: "black".to_string(),
                             drawing: LineDrawingStyle::Dashed,
@@ -194,15 +257,6 @@ impl RectChart<String, usize, Decimal, ()> {
             debug_regions,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WaterfallRect {
-    pub start: Decimal,
-    pub end: Decimal,
-}
-
-impl RectChart<String, usize, Decimal, ()> {
     /// Waterfall chart
     /// - always horizontal...
     pub fn waterfall(data: &BTreeMap<String, WaterfallRect>, debug_regions: bool) -> Self {
@@ -212,19 +266,17 @@ impl RectChart<String, usize, Decimal, ()> {
                 .enumerate()
                 .map(|(ordering, (c, v))| {
                     (
-                        Category {
+                        OrderedCategory {
                             display: c.to_string(),
                             ordering,
                         },
                         [
                             Value {
                                 value: v.start,
-                                extra: (),
                                 info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: v.end,
-                                extra: (),
                                 info: ShapeInfo::EndRect(RectStyle {
                                     fill: "red".to_string(),
                                     stroke: None,
@@ -237,10 +289,10 @@ impl RectChart<String, usize, Decimal, ()> {
                 })
                 .collect(),
             category_location: Location::Horizontal,
-            display_category: Box::new(|d, _| d.to_string()),
-            plot_category: Box::new(|o| *o),
+            display_category: Box::new(|d| d.display.to_string()),
+            plot_category: Box::new(|o| o.ordering),
             plot_values: Box::new(|v| *v),
-            display_value: Box::new(|_, _| String::new()),
+            display_value: Box::new(|_| String::new()),
             value_lines: Vec::new(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
             categories_name_proportion: Proportion(Decimal::new(4, 2)),
@@ -253,19 +305,7 @@ impl RectChart<String, usize, Decimal, ()> {
             debug_regions,
         }
     }
-}
 
-#[derive(Debug, Clone, Copy)]
-pub struct BoxPlotRect {
-    pub p0: Decimal,
-    pub p25: Decimal,
-    pub p50: Decimal,
-    pub p75: Decimal,
-    pub p100: Decimal,
-    pub mean: Decimal,
-}
-
-impl RectChart<String, usize, Decimal, ()> {
     /// Waterfall chart
     /// - always horizontal...
     pub fn boxplot(
@@ -279,14 +319,13 @@ impl RectChart<String, usize, Decimal, ()> {
                 .enumerate()
                 .map(|(ordering, (c, v))| {
                     (
-                        Category {
+                        OrderedCategory {
                             display: c.to_string(),
                             ordering,
                         },
                         [
                             Value {
                                 value: v.p0,
-                                extra: (),
                                 info: ShapeInfo::AfterConnectedLine {
                                     plot: LineStyle {
                                         color: "black".to_string(),
@@ -300,12 +339,10 @@ impl RectChart<String, usize, Decimal, ()> {
                             },
                             Value {
                                 value: v.p25,
-                                extra: (),
                                 info: ShapeInfo::StartRect,
                             },
                             Value {
                                 value: v.p50,
-                                extra: (),
                                 info: ShapeInfo::Line(LineStyle {
                                     color: "black".to_string(),
                                     drawing: LineDrawingStyle::Solid,
@@ -313,7 +350,6 @@ impl RectChart<String, usize, Decimal, ()> {
                             },
                             Value {
                                 value: v.p75,
-                                extra: (),
                                 info: ShapeInfo::EndRect(RectStyle {
                                     fill: "red".to_string(),
                                     stroke: None,
@@ -322,7 +358,6 @@ impl RectChart<String, usize, Decimal, ()> {
                             },
                             Value {
                                 value: v.p100,
-                                extra: (),
                                 info: ShapeInfo::BeforeConnectedLine {
                                     plot: LineStyle {
                                         color: "black".to_string(),
@@ -336,7 +371,6 @@ impl RectChart<String, usize, Decimal, ()> {
                             },
                             Value {
                                 value: v.mean,
-                                extra: (),
                                 info: ShapeInfo::Line(LineStyle {
                                     color: "black".to_string(),
                                     drawing: LineDrawingStyle::Dotted,
@@ -349,15 +383,15 @@ impl RectChart<String, usize, Decimal, ()> {
                 .collect(),
             category_location: Location::Horizontal,
 
-            display_category: Box::new(|d, _| d.to_string()),
-            plot_category: Box::new(|o| *o),
+            display_category: Box::new(|d| d.display.to_string()),
+            plot_category: Box::new(|o| o.ordering),
             plot_values: Box::new(|v| *v),
-            display_value: Box::new(|_, _| String::new()),
+            display_value: Box::new(|_| String::new()),
             value_lines: lines
                 .iter()
                 .map(|d| {
                     (
-                        (*d, ()),
+                        *d,
                         LineStyle {
                             color: "black".to_string(),
                             drawing: LineDrawingStyle::Dashed,
@@ -402,7 +436,7 @@ impl Proportion {
     // const ONE: Proportion = Proportion(Decimal::ONE);
 }
 
-impl<D, O, V, E> RectChart<D, O, V, E> {
+impl<C,V> RectChart<C,V> {
     pub fn render(&self) -> anyhow::Result<SvgChart> {
         ensure!(
             self.width_to_height_ratio > Decimal::ZERO,
@@ -426,7 +460,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
         let category_set = self
             .data
             .iter()
-            .map(|(c, _)| (self.plot_category)(&c.ordering))
+            .map(|(c, _)| (self.plot_category)(&c))
             .collect::<BTreeSet<_>>();
         ensure!(
             category_set.len() == self.data.len(),
@@ -464,12 +498,12 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
         let lines_min = self
             .value_lines
             .iter()
-            .map(|((val, ext), _)| (self.plot_values)(&val))
+            .map(|(val, _)| (self.plot_values)(&val))
             .min();
         let lines_max = self
             .value_lines
             .iter()
-            .map(|((val, ext), _)| (self.plot_values)(&val))
+            .map(|(val, _)| (self.plot_values)(&val))
             .max();
 
         let value_plot_min = lines_min.unwrap_or(min).min(min);
@@ -543,7 +577,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
         let map = self
             .data
             .iter()
-            .map(|x| ((self.plot_category)(&x.0.ordering), x))
+            .map(|x| ((self.plot_category)(&x.0), x))
             .collect::<BTreeMap<_, _>>();
 
         let (rect_width, gutter_width, value_name_width, category_name_width) = match self
@@ -690,7 +724,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
         }
 
         for (plot_idx, (_plot_category, (c, v))) in map.into_iter().enumerate() {
-            let display_category = (self.display_category)(&c.display, &c.ordering);
+            let display_category = (self.display_category)(&c);
 
             // calculate rect width start/end
             let rect_width_start =
@@ -931,7 +965,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
             // full width of the chart area
             // starts from the rect start
 
-            let y = scaling_factor * ((self.plot_values)(&v.0) - value_plot_min)
+            let y = scaling_factor * ((self.plot_values)(&v) - value_plot_min)
                 + match self.categoires_name_location {
                     LocationOrdering::Before | LocationOrdering::Both => category_name_width,
                     LocationOrdering::After => Decimal::ZERO,
@@ -974,7 +1008,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
                     size: Decimal::new(12, 0),
                     anchor: SvgTextAnchor::End,
                     direction: 0,
-                    content: (self.display_value)(&v.0, &v.1),
+                    content: (self.display_value)(&v),
                     text_length: None,
                 });
             }
@@ -991,7 +1025,7 @@ impl<D, O, V, E> RectChart<D, O, V, E> {
                     size: Decimal::new(12, 0),
                     anchor: SvgTextAnchor::Start,
                     direction: 0,
-                    content: (self.display_value)(&v.0, &v.1),
+                    content: (self.display_value)(&v),
                     text_length: None,
                 });
             }
