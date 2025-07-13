@@ -1,12 +1,89 @@
+#![allow(mixed_script_confusables)]
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
 };
 
 use anyhow::{Context, bail, ensure};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy::MidpointAwayFromZero};
 use tracing::{error, info};
+
+use color::{AlphaColor, ColorSpace, Oklab, OpaqueColor, Rgba8};
+// https://leonardocolor.io/theme.html#
+#[derive(Clone, Copy, Debug)]
+pub struct Color {
+    inner: AlphaColor<Oklab>,
+}
+
+impl Display for Color {
+    #[allow(non_snake_case)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+     let  [r,g,b,a] = self.inner.to_rgba8().to_u8_array();
+        write!(f,"rgb({r},{g},{b},{a})")
+    }
+}
+
+impl<CS> From<AlphaColor<CS>> for Color
+where
+    CS: ColorSpace,
+{
+    fn from(value: AlphaColor<CS>) -> Self {
+        Color {
+            inner: value.convert(),
+        }
+    }
+}
+
+impl<CS> From<OpaqueColor<CS>> for Color
+where
+    CS: ColorSpace,
+{
+    fn from(value: OpaqueColor<CS>) -> Self {
+        Color {
+            inner: value.with_alpha(1.).convert(),
+        }
+    }
+}
+
+impl From<Rgba8> for Color {
+    fn from(value: Rgba8) -> Self {
+        AlphaColor::from(value).into()
+    }
+}
+
+impl Color {
+    pub fn new(inner: AlphaColor<Oklab>) -> Self {
+        Self { inner }
+    }
+
+    pub fn rgb8(r: u8, g: u8, b: u8) -> Color {
+        Color {
+            inner: AlphaColor::from_rgb8(r, g, b).convert(),
+        }
+    }
+
+    pub fn dbg1() -> Color { Self::rgb8(16, 254, 88)}
+    pub fn dbg2() -> Color { Self::rgb8(251, 255, 0)}
+
+
+    pub fn black() -> Color { Self::rgb8(0, 0, 0)}
+    pub fn black_bg() -> Color { Self::rgb8(10, 10, 10)}
+    pub fn white() -> Color { Self::rgb8(255, 255, 255)}
+    pub fn white_bg() -> Color { Self::rgb8(245, 245, 245)}
+
+    // pub fn text() -> Color { Self::rgb8(51, 0, 102)}
+    // pub fn data1() -> Color { Self::rgb8(120, 23, 148)}
+    // pub fn data2() -> Color { Self::rgb8(182,34,188)}
+    // pub fn data3() -> Color { Self::rgb8(240,40,223)}
+
+
+    pub fn text() -> Color { Self::rgb8(10, 10, 10)}
+    pub fn data3() -> Color { Self::rgb8(30, 54, 4)}
+    pub fn data2() -> Color { Self::rgb8(53,94,7)}
+    pub fn data1() -> Color { Self::rgb8(79,137,14)}
+}
 
 // mod svg;
 
@@ -14,7 +91,6 @@ struct Value<V> {
     value: V,
     info: ShapeInfo,
 }
-
 
 #[derive(Clone, Copy, Debug)]
 pub enum Location {
@@ -136,15 +212,20 @@ pub struct OrderedCategory {
 }
 
 pub struct Process {
-    start: NaiveDate,
-    end: NaiveDate,
+    pub start: NaiveDate,
+    pub end: NaiveDate,
 }
 impl RectChart<OrderedCategory, NaiveDate> {
     /// Waterfall chart
     /// - always horizontal...
-    pub fn gantt(data: &BTreeMap<OrderedCategory, Process>, debug_regions: bool) -> Self {
+    pub fn gantt(
+        data: &[(OrderedCategory, Process)],
+        debug_regions: bool,
+        lines: &[(NaiveDate, LineStyle)],
+    ) -> Self {
         RectChart {
-            data: data.iter()
+            data: data
+                .iter()
                 .map(|(c, v)| {
                     (
                         c.clone(),
@@ -156,7 +237,7 @@ impl RectChart<OrderedCategory, NaiveDate> {
                             Value {
                                 value: v.end,
                                 info: ShapeInfo::EndRect(RectStyle {
-                                    fill: "red".to_string(),
+                                    fill: Color::data1(),
                                     stroke: None,
                                     radius: Some(Decimal::new(2, 0)),
                                 }),
@@ -166,20 +247,26 @@ impl RectChart<OrderedCategory, NaiveDate> {
                     )
                 })
                 .collect(),
-            category_location: Location::Horizontal,
+            category_location: Location::Vertical,
             display_category: Box::new(|d| d.display.to_string()),
             plot_category: Box::new(|o| o.ordering),
-            plot_values: Box::new(|v| *v),
-            display_value: Box::new(|_| String::new()),
-            value_lines: Vec::new(),
+            plot_values: Box::new(|v| v.num_days_from_ce().into()),
+            display_value: Box::new(|v| {
+                if v.day() == 1 {
+                    v.format("%b").to_string()
+                } else {
+                    v.day().to_string()
+                }
+            }),
+            value_lines: lines.iter().cloned().collect(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
-            categories_name_proportion: Proportion(Decimal::new(4, 2)),
+            categories_name_proportion: Proportion(Decimal::new(18, 2)),
             categoires_name_location: LocationOrdering::Before,
-            values_name_proportion: Proportion(Decimal::new(0, 2)),
-            values_name_location: LocationOrdering::Before,
+            values_name_proportion: Proportion(Decimal::new(5, 2)),
+            values_name_location: LocationOrdering::After,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
-            width_to_height_ratio: Decimal::ONE,
+            width_to_height_ratio: Decimal::ONE / Decimal::TWO,
             debug_regions,
         }
     }
@@ -211,7 +298,7 @@ impl RectChart<OrderedCategory, Decimal> {
                             Value {
                                 value: *v,
                                 info: ShapeInfo::EndRect(RectStyle {
-                                    fill: "red".to_string(),
+                                    fill: Color::data1(),
                                     stroke: None,
                                     radius: Some(Decimal::new(2, 0)),
                                 }),
@@ -236,7 +323,7 @@ impl RectChart<OrderedCategory, Decimal> {
                     (
                         *d,
                         LineStyle {
-                            color: "black".to_string(),
+                            color: Color::text(),
                             drawing: LineDrawingStyle::Dashed,
                         },
                     )
@@ -247,10 +334,6 @@ impl RectChart<OrderedCategory, Decimal> {
             categoires_name_location: LocationOrdering::Before,
             values_name_proportion: Proportion(Decimal::new(2, 2)),
             values_name_location: LocationOrdering::Before,
-            // categories_border_style: Some(LineStyle {
-            //     color: "black".to_string(),
-            //     drawing: LineDrawingStyle::Solid,
-            // }),
             categories_border_style: None,
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::new(15, 1),
@@ -278,7 +361,7 @@ impl RectChart<OrderedCategory, Decimal> {
                             Value {
                                 value: v.end,
                                 info: ShapeInfo::EndRect(RectStyle {
-                                    fill: "red".to_string(),
+                                    fill: Color::data1(),
                                     stroke: None,
                                     radius: Some(Decimal::new(2, 0)),
                                 }),
@@ -328,11 +411,11 @@ impl RectChart<OrderedCategory, Decimal> {
                                 value: v.p0,
                                 info: ShapeInfo::AfterConnectedLine {
                                     plot: LineStyle {
-                                        color: "black".to_string(),
+                                        color: Color::data1(),
                                         drawing: LineDrawingStyle::Solid,
                                     },
                                     connector: LineStyle {
-                                        color: "black".to_string(),
+                                        color: Color::data3(),
                                         drawing: LineDrawingStyle::Dotted,
                                     },
                                 },
@@ -344,14 +427,14 @@ impl RectChart<OrderedCategory, Decimal> {
                             Value {
                                 value: v.p50,
                                 info: ShapeInfo::Line(LineStyle {
-                                    color: "black".to_string(),
+                                    color: Color::data1(),
                                     drawing: LineDrawingStyle::Solid,
                                 }),
                             },
                             Value {
                                 value: v.p75,
                                 info: ShapeInfo::EndRect(RectStyle {
-                                    fill: "red".to_string(),
+                                    fill: Color::data2(),
                                     stroke: None,
                                     radius: Some(Decimal::new(2, 0)),
                                 }),
@@ -360,11 +443,11 @@ impl RectChart<OrderedCategory, Decimal> {
                                 value: v.p100,
                                 info: ShapeInfo::BeforeConnectedLine {
                                     plot: LineStyle {
-                                        color: "black".to_string(),
+                                        color: Color::data1(),
                                         drawing: LineDrawingStyle::Solid,
                                     },
                                     connector: LineStyle {
-                                        color: "black".to_string(),
+                                        color: Color::data3(),
                                         drawing: LineDrawingStyle::Dotted,
                                     },
                                 },
@@ -372,7 +455,7 @@ impl RectChart<OrderedCategory, Decimal> {
                             Value {
                                 value: v.mean,
                                 info: ShapeInfo::Line(LineStyle {
-                                    color: "black".to_string(),
+                                    color: Color::data3(),
                                     drawing: LineDrawingStyle::Dotted,
                                 }),
                             },
@@ -393,7 +476,7 @@ impl RectChart<OrderedCategory, Decimal> {
                     (
                         *d,
                         LineStyle {
-                            color: "black".to_string(),
+                            color: Color::text(),
                             drawing: LineDrawingStyle::Dashed,
                         },
                     )
@@ -436,7 +519,7 @@ impl Proportion {
     // const ONE: Proportion = Proportion(Decimal::ONE);
 }
 
-impl<C,V> RectChart<C,V> {
+impl<C, V> RectChart<C, V> {
     pub fn render(&self) -> anyhow::Result<SvgChart> {
         ensure!(
             self.width_to_height_ratio > Decimal::ZERO,
@@ -549,7 +632,7 @@ impl<C,V> RectChart<C,V> {
                     y: Decimal::ZERO,
                 },
                 size: extent,
-                color: Some("grey".to_string()),
+                color: Some(Color::dbg1()),
                 stroke: None,
                 rounded: None,
             });
@@ -562,7 +645,7 @@ impl<C,V> RectChart<C,V> {
             //     },
             //     size: extent,
             //     color: None,
-            //     stroke: Some(("black".to_string(), 2)),
+            //     stroke: Some((Color::black_bg(), 2)),
             //     rounded: None,
             // });
         }
@@ -634,7 +717,7 @@ impl<C,V> RectChart<C,V> {
                             - self.values_name_location.instances() * value_name_width,
                         y: category_name_width,
                     }),
-                    color: Some("lightgrey".to_string()),
+                    color: Some(Color::dbg2()),
                     stroke: None,
                     rounded: None,
                 });
@@ -661,7 +744,7 @@ impl<C,V> RectChart<C,V> {
                             - self.values_name_location.instances() * value_name_width,
                         y: category_name_width,
                     }),
-                    color: Some("lightgrey".to_string()),
+                    color: Some(Color::dbg2()),
                     stroke: None,
                     rounded: None,
                 });
@@ -690,7 +773,7 @@ impl<C,V> RectChart<C,V> {
                         y: swap_if_required(chart.extent).y
                             - self.categoires_name_location.instances() * category_name_width,
                     }),
-                    color: Some("lightblue".to_string()),
+                    color: Some(Color::dbg2()),
                     stroke: None,
                     rounded: None,
                 });
@@ -716,7 +799,7 @@ impl<C,V> RectChart<C,V> {
                         y: swap_if_required(chart.extent).y
                             - self.categoires_name_location.instances() * category_name_width,
                     }),
-                    color: Some("lightblue".to_string()),
+                    color: Some(Color::dbg2()),
                     stroke: None,
                     rounded: None,
                 });
@@ -811,7 +894,7 @@ impl<C,V> RectChart<C,V> {
                             b: line_b,
                             stroke_width: Decimal::ONE,
                             dashes: Vec::new(),
-                            color: "black".to_string(), // category_style.color.to_string(),
+                            color: category_style.color, // category_style.color.to_string(),
                         });
                     }
                     (ShapeInfo::BeforeConnectedLine { plot, connector }, Some(_), _) => {
@@ -830,7 +913,7 @@ impl<C,V> RectChart<C,V> {
                             b: line_b,
                             stroke_width: Decimal::ONE,
                             dashes: Vec::new(),
-                            color: "black".to_string(), // category_style.color.to_string(),
+                            color: plot.color, // category_style.color.to_string(),
                         });
                     }
                     (ShapeInfo::AfterConnectedLine { plot, connector }, None, _) => {
@@ -849,7 +932,7 @@ impl<C,V> RectChart<C,V> {
                             b: line_b,
                             stroke_width: Decimal::ONE,
                             dashes: Vec::new(),
-                            color: "black".to_string(), // category_style.color.to_string(),
+                            color: plot.color, // category_style.color.to_string(),
                         });
                     }
                     (ShapeInfo::AfterConnectedLine { plot, connector }, Some(_), _) => {
@@ -868,14 +951,14 @@ impl<C,V> RectChart<C,V> {
                             b: line_b,
                             stroke_width: Decimal::ONE,
                             dashes: Vec::new(),
-                            color: "black".to_string(), // category_style.color.to_string(),
+                            color: plot.color, // category_style.color.to_string(),
                         });
                     }
                     (ShapeInfo::StartRect, _, None) => {
                         // nothing to do, added when we reach the end rect
                         started_rect = Some(plot_value);
                     }
-                    (ShapeInfo::EndRect(category_style), _, Some(start)) if start > plot_value => {
+                    (ShapeInfo::EndRect(_), _, Some(start)) if start > plot_value => {
                         bail!("Invalid end-rect before started")
                     }
                     (ShapeInfo::EndRect(category_style), _, Some(start_value)) => {
@@ -892,7 +975,7 @@ impl<C,V> RectChart<C,V> {
                             start,
                             size,
 
-                            color: Some(category_style.fill.to_string()),
+                            color: Some(category_style.fill),
                             stroke: None,
                             rounded: Some(2),
                         })
@@ -929,7 +1012,7 @@ impl<C,V> RectChart<C,V> {
                     LineDrawingStyle::Dotted => Vec::from([2, 8]),
                     LineDrawingStyle::Custom(x) => x.into(),
                 },
-                color: s.color.to_string(),
+                color: s.color,
             });
             let x = match self.values_name_location {
                 LocationOrdering::After | LocationOrdering::Both => value_name_width,
@@ -951,7 +1034,7 @@ impl<C,V> RectChart<C,V> {
                     LineDrawingStyle::Dotted => Vec::from([2, 8]),
                     LineDrawingStyle::Custom(x) => x.into(),
                 },
-                color: s.color.to_string(),
+                color: s.color,
             });
         }
 
@@ -993,7 +1076,7 @@ impl<C,V> RectChart<C,V> {
                     LineDrawingStyle::Dotted => Vec::from([2, 8]),
                     LineDrawingStyle::Custom(x) => x.into(),
                 },
-                color: s.color.to_string(),
+                color: s.color,
             });
 
             if matches!(
@@ -1031,7 +1114,7 @@ impl<C,V> RectChart<C,V> {
             }
         }
 
-        let pad = Decimal::new(25, 0);
+        let pad = Decimal::new(50, 0);
 
         chart.extent = chart.extent.translate(Point { x: pad, y: pad });
         chart.translate(Point {
@@ -1046,7 +1129,7 @@ impl<C,V> RectChart<C,V> {
             },
             size: chart.extent,
             color: None,
-            stroke: Some(("green".to_string(), 2)),
+            stroke: Some((Color::data3(), 2)),
             rounded: None,
         });
 
@@ -1070,15 +1153,15 @@ pub enum ShapeInfo {
 }
 
 // struct TextStyle {
-//     color: String,
+//     color: Color,
 //     // later font, etc
 //     // size? proportional?
 // }
 
 #[derive(Clone, Debug)]
 struct RectStyle {
-    fill: String,
-    stroke: Option<(String, usize)>,
+    fill: Color,
+    stroke: Option<(Color, usize)>,
     radius: Option<Decimal>,
     // later shading, gradients
     // border, fill, etc
@@ -1087,9 +1170,9 @@ struct RectStyle {
 }
 
 #[derive(Clone, Debug)]
-struct LineStyle {
-    color: String,
-    drawing: LineDrawingStyle,
+pub struct LineStyle {
+    pub color: Color,
+    pub drawing: LineDrawingStyle,
 }
 
 #[derive(Clone, Debug)]
@@ -1184,6 +1267,35 @@ impl Display for SvgChart {
             self.extent.x, self.extent.y
         )?;
 
+        write!(
+            f,
+            r#"
+  <style>
+    @font-face {{
+      font-family: "FiraSans";
+      src:
+        url("https://mdn.github.io/shared-assets/fonts/FiraSans-Regular.woff2")
+          format("woff2"),
+       
+    }}
+
+    @font-face {{
+      font-family: "IBMPlexSerif";
+      src:
+        url("https://mdn.github.io/shared-assets/fonts/plex/IBMPlexSerif-Regular.woff2")
+          format("woff2"),
+       
+    }}
+
+    /* Style the text */
+    text {{
+      /* Specify the system or custom font to use */
+      font-family: "FiraSans", serif;
+    }}
+  </style>
+            "#,
+        )?;
+
         for x in &self.rects {
             Display::fmt(&x, f)?;
         }
@@ -1202,8 +1314,8 @@ impl Display for SvgChart {
 struct SvgRect {
     start: Point,
     size: Point,
-    color: Option<String>,
-    stroke: Option<(String, usize)>,
+    color: Option<Color>,
+    stroke: Option<(Color, usize)>,
     rounded: Option<usize>,
 }
 
@@ -1309,7 +1421,7 @@ struct SvgLine {
     b: Point,
     stroke_width: Decimal,
     dashes: Vec<usize>,
-    color: String,
+    color: Color,
 }
 
 impl SvgLine {

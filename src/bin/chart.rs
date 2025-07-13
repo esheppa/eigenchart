@@ -1,7 +1,11 @@
-use std::fs;
+use std::{collections::LinkedList, fs};
 
 use anyhow::Context;
-use eigenchart::{BoxPlotRect, Location, RectChart, WaterfallRect};
+use chrono::NaiveDate;
+use eigenchart::{
+    BoxPlotRect, Color, LineDrawingStyle, LineStyle, Location, OrderedCategory, Process, RectChart,
+    WaterfallRect,
+};
 use rust_decimal::Decimal;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -34,6 +38,8 @@ fn main() -> anyhow::Result<()> {
     ]
     .into();
 
+    let debug = false;
+
     // basic horizontal
     // borders when not both
 
@@ -48,7 +54,7 @@ fn main() -> anyhow::Result<()> {
             Decimal::new(80, 0),
             Decimal::new(100, 0),
         ],
-        false,
+        debug,
         2,
     );
 
@@ -95,7 +101,7 @@ fn main() -> anyhow::Result<()> {
         ),
     ]
     .into();
-    let waterfall = RectChart::waterfall(&data, true);
+    let waterfall = RectChart::waterfall(&data, debug);
 
     let mut svg = waterfall.render().context("render waterfall")?;
     svg.flip_y();
@@ -140,7 +146,7 @@ fn main() -> anyhow::Result<()> {
     .into();
     let boxplot = RectChart::boxplot(
         &data,
-        true,
+        debug,
         &[
             Decimal::new(0, 0),
             Decimal::new(20, 0),
@@ -154,6 +160,112 @@ fn main() -> anyhow::Result<()> {
     svg.flip_y();
 
     fs::write("boxplot.svg", svg.to_string()).context("write boxplot")?;
+
+    let data = [
+        (
+            OrderedCategory {
+                display: "Undergrounds".to_string(),
+                ordering: 1,
+            },
+            Process {
+                start: NaiveDate::from_ymd_opt(2025, 05, 05).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 07, 07).unwrap(),
+            },
+        ),
+        (
+            OrderedCategory {
+                display: "Slab".to_string(),
+                ordering: 2,
+            },
+            Process {
+                start: NaiveDate::from_ymd_opt(2025, 06, 05).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 07, 05).unwrap(),
+            },
+        ),
+        (
+            OrderedCategory {
+                display: "Frame".to_string(),
+                ordering: 3,
+            },
+            Process {
+                start: NaiveDate::from_ymd_opt(2025, 07, 07).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 07, 15).unwrap(),
+            },
+        ),
+        (
+            OrderedCategory {
+                display: "Roof".to_string(),
+                ordering: 4,
+            },
+            Process {
+                start: NaiveDate::from_ymd_opt(2025, 07, 15).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 08, 12).unwrap(),
+            },
+        ),
+        (
+            OrderedCategory {
+                display: "Rough-in".to_string(),
+                ordering: 5,
+            },
+            Process {
+                start: NaiveDate::from_ymd_opt(2025, 07, 15).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 08, 08).unwrap(),
+            },
+        ),
+    ];
+
+    let weekly_line = LineStyle {
+        color: Color::data3(),
+        drawing: LineDrawingStyle::Dotted,
+    };
+    let key_line = LineStyle {
+        color: Color::data2(),
+        drawing: LineDrawingStyle::Dashed,
+    };
+
+    let gantt = RectChart::gantt(
+        &data,
+        debug,
+        &[
+            (
+                NaiveDate::from_ymd_opt(2025, 07, 07).unwrap(),
+                key_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 07, 15).unwrap(),
+                key_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 08, 12).unwrap(),
+                key_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 05, 01).unwrap(),
+                weekly_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 06, 01).unwrap(),
+                weekly_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 07, 01).unwrap(),
+                weekly_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 08, 01).unwrap(),
+                weekly_line.clone(),
+            ),
+            (
+                NaiveDate::from_ymd_opt(2025, 09, 01).unwrap(),
+                weekly_line.clone(),
+            ),
+        ],
+    );
+
+    let mut svg = gantt.render().context("render gantt")?;
+    // svg.flip_y();
+
+    fs::write("gantt.svg", svg.to_string()).context("write gantt")?;
 
     Ok(())
 }
