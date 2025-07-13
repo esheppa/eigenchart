@@ -204,6 +204,7 @@ pub struct RectChart<C, V> {
     _chart_title: String, // need a better location ... and also specify whether in/out of chart
     width_to_height_ratio: Decimal,
     debug_regions: bool,
+    padding: Decimal,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -286,6 +287,7 @@ impl RectChart<OrderedCategory, NaiveDate> {
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::ONE / Decimal::TWO,
             debug_regions,
+            padding: Decimal::new(50, 0),
         }
     }
 }
@@ -356,6 +358,7 @@ impl RectChart<OrderedCategory, Decimal> {
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::new(15, 1),
             debug_regions,
+            padding: Decimal::new(50, 0),
         }
     }
     /// Waterfall chart
@@ -404,6 +407,7 @@ impl RectChart<OrderedCategory, Decimal> {
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::ONE,
             debug_regions,
+            padding: Decimal::new(50, 0),
         }
     }
 
@@ -509,6 +513,7 @@ impl RectChart<OrderedCategory, Decimal> {
             _chart_title: "abc".to_string(),
             width_to_height_ratio: Decimal::ONE,
             debug_regions,
+            padding: Decimal::new(50, 0),
         }
     }
 }
@@ -884,7 +889,7 @@ impl<C, V> RectChart<C, V> {
                                     x: rect_width_start
                                         + rect_width / Decimal::TWO
                                         + Decimal::new(3, 0),
-                                    y: category_name_width - Decimal::new(6,0),
+                                    y: category_name_width - Decimal::new(6, 0),
                                 }),
                                 size: Decimal::new(12, 0),
                                 anchor: SvgTextAnchor::End,
@@ -922,7 +927,8 @@ impl<C, V> RectChart<C, V> {
                                     x: rect_width_start
                                         + rect_width / Decimal::TWO
                                         + Decimal::new(3, 0),
-                                    y: swap_if_required(chart.extent).y - category_name_width + Decimal::new(6,0),
+                                    y: swap_if_required(chart.extent).y - category_name_width
+                                        + Decimal::new(6, 0),
                                 }),
                                 size: Decimal::new(12, 0),
                                 anchor: SvgTextAnchor::Start,
@@ -1192,8 +1198,8 @@ impl<C, V> RectChart<C, V> {
                     Location::Vertical => {
                         chart.labels.push(SvgLabel {
                             a: swap_if_required(Point {
-                                x: swap_if_required(chart.extent).x
-                                    - value_name_width + Decimal::new(12, 0),
+                                x: swap_if_required(chart.extent).x - value_name_width
+                                    + Decimal::new(12, 0),
                                 y: y,
                             }),
                             size: Decimal::new(12, 0),
@@ -1207,12 +1213,13 @@ impl<C, V> RectChart<C, V> {
             }
         }
 
-        let pad = Decimal::new(50, 0);
-
-        chart.extent = chart.extent.translate(Point { x: pad, y: pad });
+        chart.extent = chart.extent.translate(Point {
+            x: self.padding,
+            y: self.padding,
+        });
         chart.translate(Point {
-            x: pad / Decimal::TWO,
-            y: pad / Decimal::TWO,
+            x: self.padding / Decimal::TWO,
+            y: self.padding / Decimal::TWO,
         });
 
         chart.rects.push(SvgRect {
