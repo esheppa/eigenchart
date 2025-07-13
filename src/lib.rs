@@ -20,8 +20,8 @@ pub struct Color {
 impl Display for Color {
     #[allow(non_snake_case)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-     let  [r,g,b,a] = self.inner.to_rgba8().to_u8_array();
-        write!(f,"rgb({r},{g},{b},{a})")
+        let [r, g, b, a] = self.inner.to_rgba8().to_u8_array();
+        write!(f, "rgb({r},{g},{b},{a})")
     }
 }
 
@@ -64,25 +64,43 @@ impl Color {
         }
     }
 
-    pub fn dbg1() -> Color { Self::rgb8(16, 254, 88)}
-    pub fn dbg2() -> Color { Self::rgb8(251, 255, 0)}
+    pub fn dbg1() -> Color {
+        Self::rgb8(16, 254, 88)
+    }
+    pub fn dbg2() -> Color {
+        Self::rgb8(251, 255, 0)
+    }
 
-
-    pub fn black() -> Color { Self::rgb8(0, 0, 0)}
-    pub fn black_bg() -> Color { Self::rgb8(10, 10, 10)}
-    pub fn white() -> Color { Self::rgb8(255, 255, 255)}
-    pub fn white_bg() -> Color { Self::rgb8(245, 245, 245)}
+    pub fn black() -> Color {
+        Self::rgb8(0, 0, 0)
+    }
+    pub fn black_bg() -> Color {
+        Self::rgb8(10, 10, 10)
+    }
+    pub fn white() -> Color {
+        Self::rgb8(255, 255, 255)
+    }
+    pub fn white_bg() -> Color {
+        Self::rgb8(245, 245, 245)
+    }
 
     // pub fn text() -> Color { Self::rgb8(51, 0, 102)}
     // pub fn data1() -> Color { Self::rgb8(120, 23, 148)}
     // pub fn data2() -> Color { Self::rgb8(182,34,188)}
     // pub fn data3() -> Color { Self::rgb8(240,40,223)}
 
-
-    pub fn text() -> Color { Self::rgb8(10, 10, 10)}
-    pub fn data3() -> Color { Self::rgb8(30, 54, 4)}
-    pub fn data2() -> Color { Self::rgb8(53,94,7)}
-    pub fn data1() -> Color { Self::rgb8(79,137,14)}
+    pub fn text() -> Color {
+        Self::rgb8(10, 10, 10)
+    }
+    pub fn data3() -> Color {
+        Self::rgb8(30, 54, 4)
+    }
+    pub fn data2() -> Color {
+        Self::rgb8(53, 94, 7)
+    }
+    pub fn data1() -> Color {
+        Self::rgb8(79, 137, 14)
+    }
 }
 
 // mod svg;
@@ -260,9 +278,9 @@ impl RectChart<OrderedCategory, NaiveDate> {
             }),
             value_lines: lines.iter().cloned().collect(),
             categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
-            categories_name_proportion: Proportion(Decimal::new(18, 2)),
+            categories_name_proportion: Proportion(Decimal::new(15, 2)),
             categoires_name_location: LocationOrdering::Before,
-            values_name_proportion: Proportion(Decimal::new(5, 2)),
+            values_name_proportion: Proportion(Decimal::new(6, 2)),
             values_name_location: LocationOrdering::After,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
@@ -846,35 +864,74 @@ impl<C, V> RectChart<C, V> {
                     self.categoires_name_location,
                     LocationOrdering::Before | LocationOrdering::Both
                 ) {
-                    chart.labels.push(SvgLabel {
-                        a: swap_if_required(Point {
-                            x: rect_width_start + rect_width / Decimal::TWO,
-                            y: (category_name_width - Decimal::new(12, 0)) / Decimal::TWO,
-                        }),
-                        size: Decimal::new(12, 0),
-                        anchor: SvgTextAnchor::Middle,
-                        direction: 0,
-                        content: display_category.to_string(),
-                        text_length: None,
-                    });
+                    match self.category_location {
+                        Location::Horizontal => {
+                            chart.labels.push(SvgLabel {
+                                a: swap_if_required(Point {
+                                    x: rect_width_start + rect_width / Decimal::TWO,
+                                    y: (category_name_width - Decimal::new(12, 0)) / Decimal::TWO,
+                                }),
+                                size: Decimal::new(12, 0),
+                                anchor: SvgTextAnchor::Middle,
+                                direction: 0,
+                                content: display_category.to_string(),
+                                text_length: None,
+                            });
+                        }
+                        Location::Vertical => {
+                            chart.labels.push(SvgLabel {
+                                a: swap_if_required(Point {
+                                    x: rect_width_start
+                                        + rect_width / Decimal::TWO
+                                        + Decimal::new(3, 0),
+                                    y: category_name_width - Decimal::new(6,0),
+                                }),
+                                size: Decimal::new(12, 0),
+                                anchor: SvgTextAnchor::End,
+                                direction: 0,
+                                content: display_category.to_string(),
+                                text_length: None,
+                            });
+                        }
+                    }
                 }
 
                 if matches!(
                     self.categoires_name_location,
                     LocationOrdering::After | LocationOrdering::Both
                 ) {
-                    chart.labels.push(SvgLabel {
-                        a: swap_if_required(Point {
-                            x: rect_width_start + rect_width / Decimal::TWO,
-                            y: swap_if_required(chart.extent).y
-                                - (category_name_width + Decimal::new(12, 0)) / Decimal::TWO,
-                        }),
-                        size: Decimal::new(12, 0),
-                        anchor: SvgTextAnchor::Middle,
-                        direction: 0,
-                        content: display_category.to_string(),
-                        text_length: None,
-                    });
+                    match self.category_location {
+                        Location::Horizontal => {
+                            chart.labels.push(SvgLabel {
+                                a: swap_if_required(Point {
+                                    x: rect_width_start + rect_width / Decimal::TWO,
+                                    y: swap_if_required(chart.extent).y
+                                        - (category_name_width + Decimal::new(12, 0))
+                                            / Decimal::TWO,
+                                }),
+                                size: Decimal::new(12, 0),
+                                anchor: SvgTextAnchor::Middle,
+                                direction: 0,
+                                content: display_category.to_string(),
+                                text_length: None,
+                            });
+                        }
+                        Location::Vertical => {
+                            chart.labels.push(SvgLabel {
+                                a: swap_if_required(Point {
+                                    x: rect_width_start
+                                        + rect_width / Decimal::TWO
+                                        + Decimal::new(3, 0),
+                                    y: swap_if_required(chart.extent).y - category_name_width + Decimal::new(6,0),
+                                }),
+                                size: Decimal::new(12, 0),
+                                anchor: SvgTextAnchor::Start,
+                                direction: 0,
+                                content: display_category.to_string(),
+                                text_length: None,
+                            });
+                        }
+                    }
                 }
 
                 match (plot_shape, previous_shape, started_rect) {
@@ -1083,34 +1140,70 @@ impl<C, V> RectChart<C, V> {
                 self.values_name_location,
                 LocationOrdering::Before | LocationOrdering::Both
             ) {
-                chart.labels.push(SvgLabel {
-                    a: swap_if_required(Point {
-                        x: Decimal::ZERO + value_name_width * Decimal::new(9, 1),
-                        y: y - Decimal::new(3, 0),
-                    }),
-                    size: Decimal::new(12, 0),
-                    anchor: SvgTextAnchor::End,
-                    direction: 0,
-                    content: (self.display_value)(&v),
-                    text_length: None,
-                });
+                match self.category_location {
+                    Location::Horizontal => {
+                        chart.labels.push(SvgLabel {
+                            a: swap_if_required(Point {
+                                x: Decimal::ZERO + value_name_width * Decimal::new(9, 1),
+                                y: y - Decimal::new(3, 0),
+                            }),
+                            size: Decimal::new(12, 0),
+                            anchor: SvgTextAnchor::End,
+                            direction: 0,
+                            content: (self.display_value)(&v),
+                            text_length: None,
+                        });
+                    }
+                    Location::Vertical => {
+                        chart.labels.push(SvgLabel {
+                            a: swap_if_required(Point {
+                                x: value_name_width - Decimal::new(4, 0),
+                                y: y,
+                            }),
+                            size: Decimal::new(12, 0),
+                            anchor: SvgTextAnchor::Middle,
+                            direction: 0,
+                            content: (self.display_value)(&v),
+                            text_length: None,
+                        });
+                    }
+                }
             }
 
             if matches!(
                 self.values_name_location,
                 LocationOrdering::After | LocationOrdering::Both
             ) {
-                chart.labels.push(SvgLabel {
-                    a: swap_if_required(Point {
-                        x: swap_if_required(chart.extent).x - value_name_width * Decimal::new(9, 1),
-                        y: y - Decimal::new(3, 0),
-                    }),
-                    size: Decimal::new(12, 0),
-                    anchor: SvgTextAnchor::Start,
-                    direction: 0,
-                    content: (self.display_value)(&v),
-                    text_length: None,
-                });
+                match self.category_location {
+                    Location::Horizontal => {
+                        chart.labels.push(SvgLabel {
+                            a: swap_if_required(Point {
+                                x: swap_if_required(chart.extent).x
+                                    - value_name_width * Decimal::new(9, 1),
+                                y: y - Decimal::new(3, 0),
+                            }),
+                            size: Decimal::new(12, 0),
+                            anchor: SvgTextAnchor::Start,
+                            direction: 0,
+                            content: (self.display_value)(&v),
+                            text_length: None,
+                        });
+                    }
+                    Location::Vertical => {
+                        chart.labels.push(SvgLabel {
+                            a: swap_if_required(Point {
+                                x: swap_if_required(chart.extent).x
+                                    - value_name_width + Decimal::new(12, 0),
+                                y: y,
+                            }),
+                            size: Decimal::new(12, 0),
+                            anchor: SvgTextAnchor::Middle,
+                            direction: 0,
+                            content: (self.display_value)(&v),
+                            text_length: None,
+                        });
+                    }
+                }
             }
         }
 
