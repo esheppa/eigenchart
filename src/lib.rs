@@ -105,9 +105,9 @@ impl Color {
 
 // mod svg;
 
-struct Value<V> {
-    value: V,
-    info: ShapeInfo,
+pub struct Value<V> {
+    pub value: V,
+    pub info: ShapeInfo,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -519,7 +519,7 @@ impl RectChart<OrderedCategory, Decimal> {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-struct Proportion(Decimal);
+pub struct Proportion(Decimal);
 
 impl Display for Proportion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1259,10 +1259,10 @@ pub enum ShapeInfo {
 // }
 
 #[derive(Clone, Debug)]
-struct RectStyle {
-    fill: Color,
-    stroke: Option<(Color, usize)>,
-    radius: Option<Decimal>,
+pub struct RectStyle {
+    pub fill: Color,
+    pub stroke: Option<(Color, usize)>,
+    pub radius: Option<Decimal>,
     // later shading, gradients
     // border, fill, etc
     // corner radius :)
