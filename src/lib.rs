@@ -531,7 +531,7 @@ impl Proportion {
         Proportion(Decimal::ONE - self.0)
     }
 
-    fn new(d: Decimal) -> anyhow::Result<Proportion> {
+    pub fn new(d: Decimal) -> anyhow::Result<Proportion> {
         ensure!(
             d >= Decimal::ZERO && d <= Decimal::ONE,
             "Invalid proportion of `{d}` - expected [0, 1]"
