@@ -174,37 +174,37 @@ impl Display for LocationOrdering {
 
 // the amount of fields is diabolical, but is kept private.
 pub struct RectChart<C, V> {
-    data: Vec<(C, Vec<Value<V>>)>,
+    pub data: Vec<(C, Vec<Value<V>>)>,
     // _tooltip: Box<dyn Fn(D, O, V, E) -> String>,
-    category_location: Location,
+    pub category_location: Location,
     // category_style: Box<dyn Fn(&D, &O) -> RectStyle>,
-    display_category: Box<dyn Fn(&C) -> String>,
-    plot_category: Box<dyn Fn(&C) -> usize>,
+    pub display_category: Box<dyn Fn(&C) -> String>,
+    pub plot_category: Box<dyn Fn(&C) -> usize>,
     // tooltip_values: Box<dyn Fn(&V, &E) -> String>,
-    plot_values: Box<dyn Fn(&V) -> Decimal>,
-    display_value: Box<dyn Fn(&V) -> String>,
+    pub plot_values: Box<dyn Fn(&V) -> Decimal>,
+    pub display_value: Box<dyn Fn(&V) -> String>,
     // these don't need to be calculated dynamically as we already have all the data by now
     // don't need lines to seperate categories...
-    value_lines: Vec<(V, LineStyle)>,
+    pub value_lines: Vec<(V, LineStyle)>,
 
     // where the proportion is for a dynamic number of things, it applies once
-    categories_gutter_proportion: Proportion,
+    pub categories_gutter_proportion: Proportion,
     // categories_margin_proportion: Proportion,
     // categories_padding_proportion: Proportion,
-    categories_name_proportion: Proportion,
-    categoires_name_location: LocationOrdering,
+    pub categories_name_proportion: Proportion,
+    pub categoires_name_location: LocationOrdering,
 
     // where it is for a known limited set of things it applies each time, here it is applied once or twice (or zero times????)
-    values_name_proportion: Proportion,
+    pub values_name_proportion: Proportion,
 
-    values_name_location: LocationOrdering,
+    pub values_name_location: LocationOrdering,
 
-    categories_border_style: Option<LineStyle>,
+    pub categories_border_style: Option<LineStyle>,
 
-    _chart_title: String, // need a better location ... and also specify whether in/out of chart
-    width_to_height_ratio: Decimal,
-    debug_regions: bool,
-    padding: Decimal,
+    pub  _chart_title: String, // need a better location ... and also specify whether in/out of chart
+    pub  width_to_height_ratio: Decimal,
+    pub  debug_regions: bool,
+    pub  padding: Decimal,
 }
 
 #[derive(Debug, Clone, Copy)]
