@@ -38,7 +38,7 @@ fn main() -> anyhow::Result<()> {
     ]
     .into();
 
-    let debug = false;
+    let debug = true;
 
     // basic horizontal
     // borders when not both
@@ -260,6 +260,7 @@ fn main() -> anyhow::Result<()> {
                 weekly_line.clone(),
             ),
         ],
+        Decimal::TWO,
     );
 
     let mut svg = gantt.render().context("render gantt")?;

@@ -201,10 +201,11 @@ pub struct RectChart<C, V> {
 
     pub categories_border_style: Option<LineStyle>,
 
-    pub  _chart_title: String, // need a better location ... and also specify whether in/out of chart
-    pub  width_to_height_ratio: Decimal,
-    pub  debug_regions: bool,
-    pub  padding: Decimal,
+    pub _chart_title: String, // need a better location ... and also specify whether in/out of chart
+    pub width_multiplier: Decimal,
+    pub height_multiplier: Decimal,
+    pub debug_regions: bool,
+    pub padding: Decimal,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -230,6 +231,7 @@ pub struct OrderedCategory {
     pub ordering: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct Process {
     pub start: NaiveDate,
     pub end: NaiveDate,
@@ -241,6 +243,8 @@ impl RectChart<OrderedCategory, NaiveDate> {
         data: &[(OrderedCategory, Process)],
         debug_regions: bool,
         lines: &[(NaiveDate, LineStyle)],
+        width_multiplier: Decimal,
+        height_multiplier: Decimal,
     ) -> Self {
         RectChart {
             data: data
@@ -285,7 +289,8 @@ impl RectChart<OrderedCategory, NaiveDate> {
             values_name_location: LocationOrdering::After,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
-            width_to_height_ratio: Decimal::ONE / Decimal::TWO,
+            height_multiplier,
+            width_multiplier,
             debug_regions,
             padding: Decimal::new(50, 0),
         }
@@ -356,7 +361,8 @@ impl RectChart<OrderedCategory, Decimal> {
             values_name_location: LocationOrdering::Before,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
-            width_to_height_ratio: Decimal::new(15, 1),
+            width_multiplier: Decimal::new(15, 1),
+            height_multiplier: Decimal::ONE,
             debug_regions,
             padding: Decimal::new(50, 0),
         }
@@ -405,7 +411,8 @@ impl RectChart<OrderedCategory, Decimal> {
             values_name_location: LocationOrdering::Before,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
-            width_to_height_ratio: Decimal::ONE,
+            width_multiplier: Decimal::ONE,
+            height_multiplier: Decimal::ONE,
             debug_regions,
             padding: Decimal::new(50, 0),
         }
@@ -511,7 +518,8 @@ impl RectChart<OrderedCategory, Decimal> {
             values_name_location: LocationOrdering::Before,
             categories_border_style: None,
             _chart_title: "abc".to_string(),
-            width_to_height_ratio: Decimal::ONE,
+            width_multiplier: Decimal::ONE,
+            height_multiplier: Decimal::ONE,
             debug_regions,
             padding: Decimal::new(50, 0),
         }
@@ -545,8 +553,12 @@ impl Proportion {
 impl<C, V> RectChart<C, V> {
     pub fn render(&self) -> anyhow::Result<SvgChart> {
         ensure!(
-            self.width_to_height_ratio > Decimal::ZERO,
-            "Cannot render a chart with width less than or equal to * the height",
+            self.width_multiplier >= Decimal::ONE,
+            "Cannot render a chart with width less than one",
+        );
+        ensure!(
+            self.height_multiplier >= Decimal::ONE,
+            "Cannot render a chart with height less than one",
         );
 
         let categories_proportion = Proportion::new(
@@ -627,19 +639,22 @@ impl<C, V> RectChart<C, V> {
             Location::Vertical => p.swap(),
         };
 
-        let (extent, scaling_factor) = {
-            let height = value_plot_range / values_proportion.0;
+        let (extent, scaling_factor_height, scaling_factor_width) = {
+            // let height = value_plot_range / values_proportion.0;
             let base = Decimal::new(500, 0);
+            let width = self.width_multiplier * base;
+            let height = self.height_multiplier * base;
             (
                 swap_if_required(Point {
-                    x: self.width_to_height_ratio * base,
-                    y: base,
+                    x: width,
+                    y: height,
                 }),
-                base / height,
+                height / (value_plot_range / values_proportion.0),
+                width / (Decimal::ONE / categories_proportion.0),
             )
         };
 
-        info!("extent {extent:?}, scaling: {scaling_factor}");
+        info!("extent {extent:?}, scaling: {scaling_factor_height}");
 
         let mut chart = SvgChart {
             extent,
@@ -944,12 +959,12 @@ impl<C, V> RectChart<C, V> {
                     (ShapeInfo::Line(category_style), _, _) => {
                         // for a line we just plot it whatever
                         let line_a = swap_if_required(Point {
-                            x: rect_width_start * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_start * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         let line_b = swap_if_required(Point {
-                            x: rect_width_end * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_end * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         info!("Pushing line {line_a} to {line_b}");
                         chart.lines.push(SvgLine {
@@ -963,12 +978,12 @@ impl<C, V> RectChart<C, V> {
                     (ShapeInfo::BeforeConnectedLine { plot, connector }, Some(_), _) => {
                         error!("TODO: BeforeConnectedLine");
                         let line_a = swap_if_required(Point {
-                            x: rect_width_start * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_start * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         let line_b = swap_if_required(Point {
-                            x: rect_width_end * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_end * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         info!("Pushing line {line_a} to {line_b}");
                         chart.lines.push(SvgLine {
@@ -982,12 +997,12 @@ impl<C, V> RectChart<C, V> {
                     (ShapeInfo::AfterConnectedLine { plot, connector }, None, _) => {
                         error!("TODO: AfterConnectedLine");
                         let line_a = swap_if_required(Point {
-                            x: rect_width_start * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_start * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         let line_b = swap_if_required(Point {
-                            x: rect_width_end * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_end * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         info!("Pushing line {line_a} to {line_b}");
                         chart.lines.push(SvgLine {
@@ -1001,12 +1016,12 @@ impl<C, V> RectChart<C, V> {
                     (ShapeInfo::AfterConnectedLine { plot, connector }, Some(_), _) => {
                         error!("TODO: AfterConnectedLine");
                         let line_a = swap_if_required(Point {
-                            x: rect_width_start * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_start * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         let line_b = swap_if_required(Point {
-                            x: rect_width_end * self.width_to_height_ratio,
-                            y: rect_base_start + plot_value * scaling_factor,
+                            x: rect_width_end * scaling_factor_width,
+                            y: rect_base_start + plot_value * scaling_factor_height,
                         });
                         info!("Pushing line {line_a} to {line_b}");
                         chart.lines.push(SvgLine {
@@ -1026,12 +1041,12 @@ impl<C, V> RectChart<C, V> {
                     }
                     (ShapeInfo::EndRect(category_style), _, Some(start_value)) => {
                         let start = swap_if_required(Point {
-                            x: rect_width_start, // * self.width_to_height_ratio,
-                            y: rect_base_start + start_value * scaling_factor,
+                            x: rect_width_start, // * scaling_factor_width,
+                            y: rect_base_start + start_value * scaling_factor_height,
                         });
                         let size = swap_if_required(Point {
-                            x: rect_width, // * self.width_to_height_ratio,
-                            y: (plot_value - start_value) * scaling_factor,
+                            x: rect_width, // * scaling_factor_width,
+                            y: (plot_value - start_value) * scaling_factor_height,
                         });
                         info!("Pushing rect: corner {start}, size {size}");
                         chart.rects.push(SvgRect {
@@ -1055,12 +1070,12 @@ impl<C, V> RectChart<C, V> {
                 LocationOrdering::Before | LocationOrdering::Both => value_name_width,
                 LocationOrdering::After => Decimal::ZERO,
             };
-            let ymin = scaling_factor * value_plot_min
+            let ymin = scaling_factor_height * value_plot_min
                 + match self.categoires_name_location {
                     LocationOrdering::Before | LocationOrdering::Both => category_name_width,
                     LocationOrdering::After => Decimal::ZERO,
                 };
-            let ymax = scaling_factor * value_plot_max
+            let ymax = scaling_factor_height * value_plot_max
                 + match self.categoires_name_location {
                     LocationOrdering::Before | LocationOrdering::Both => category_name_width,
                     LocationOrdering::After => Decimal::ZERO,
@@ -1111,7 +1126,7 @@ impl<C, V> RectChart<C, V> {
             // full width of the chart area
             // starts from the rect start
 
-            let y = scaling_factor * ((self.plot_values)(&v) - value_plot_min)
+            let y = scaling_factor_height * ((self.plot_values)(&v) - value_plot_min)
                 + match self.categoires_name_location {
                     LocationOrdering::Before | LocationOrdering::Both => category_name_width,
                     LocationOrdering::After => Decimal::ZERO,
