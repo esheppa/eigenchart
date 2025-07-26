@@ -6,6 +6,8 @@ use eigenchart::{
     BoxPlotRect, Color, LineDrawingStyle, LineStyle, Location, OrderedCategory, Process, RectChart,
     WaterfallRect,
 };
+use rand::thread_rng;
+use rand_distr::{Distribution, Normal};
 use rust_decimal::Decimal;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -268,5 +270,29 @@ fn main() -> anyhow::Result<()> {
 
     fs::write("gantt.svg", svg.to_string()).context("write gantt")?;
 
+
+    // basic horizontal
+    // borders when not both
+
+    let data = Normal::new(50.0, 25.0)?.sample_iter(rand::rng()).take(300);
+    let basic = RectChart::basic(
+        &data,
+        Location::Horizontal,
+        &[
+            // Decimal::new(0, 0),
+            // Decimal::new(20, 0),
+            // Decimal::new(40, 0),
+            // Decimal::new(60, 0),
+            // Decimal::new(80, 0),
+            // Decimal::new(100, 0),
+        ],
+        debug,
+        2,
+    );
+
+    let mut svg = basic.render().context("render chart")?;
+    svg.flip_y();
+
+    fs::write("detailed.svg", svg.to_string()).context("write chart")?;
     Ok(())
 }
