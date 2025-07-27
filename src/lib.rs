@@ -298,6 +298,75 @@ impl RectChart<OrderedCategory, NaiveDate> {
 }
 
 impl RectChart<OrderedCategory, Decimal> {
+     pub fn timeseries(
+        data: &Vec<(Decimal, Decimal)>,
+        category_location: Location,
+        lines: &[Decimal],
+        debug_regions: bool,
+        // decimal_places: u32,
+    ) -> Self {
+        RectChart {
+            data: data
+                .iter()
+                .enumerate()
+                .map(|(ordering, (start, end))| {
+                    (
+                        OrderedCategory {
+                            display: String::new(),
+                            ordering,
+                        },
+                        [
+                            Value {
+                                value: *start,
+                                info: ShapeInfo::StartRect,
+                            },
+                            Value {
+                                value: *end,
+                                info: ShapeInfo::EndRect(RectStyle {
+                                    fill: Color::data1(),
+                                    stroke: None,
+                                    radius: Some(Decimal::new(2, 0)),
+                                }),
+                            },
+                        ]
+                        .into(),
+                    )
+                })
+                .collect(),
+            category_location,
+
+            display_category: Box::new(|d| String::new()),
+            plot_category: Box::new(|o| o.ordering),
+            display_value: Box::new(move |v| {
+               String::new()
+            }),
+            plot_values: Box::new(|v| *v),
+            value_lines: lines
+                .iter()
+                .map(|d| {
+                    (
+                        *d,
+                        LineStyle {
+                            color: Color::text(),
+                            drawing: LineDrawingStyle::Dashed,
+                        },
+                    )
+                })
+                .collect(),
+            categories_gutter_proportion: Proportion(Decimal::new(2, 1)),
+            categories_name_proportion: Proportion(Decimal::new(4, 2)),
+            categoires_name_location: LocationOrdering::Before,
+            values_name_proportion: Proportion(Decimal::new(2, 2)),
+            values_name_location: LocationOrdering::Before,
+            categories_border_style: None,
+            _chart_title: "abc".to_string(),
+            width_multiplier: Decimal::new(15, 1),
+            height_multiplier: Decimal::ONE,
+            debug_regions,
+            padding: Decimal::new(50, 0),
+        }
+    }
+
     pub fn basic(
         data: &BTreeMap<String, Decimal>,
         category_location: Location,

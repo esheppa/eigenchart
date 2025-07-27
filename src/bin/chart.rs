@@ -6,12 +6,11 @@ use eigenchart::{
     BoxPlotRect, Color, LineDrawingStyle, LineStyle, Location, OrderedCategory, Process, RectChart,
     WaterfallRect,
 };
-use rand::thread_rng;
 use rand_distr::{Distribution, Normal};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, prelude::FromPrimitive};
+use std::ops::*;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
-
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -40,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     ]
     .into();
 
-    let debug = true;
+    let debug = false;
 
     // basic horizontal
     // borders when not both
@@ -263,19 +262,30 @@ fn main() -> anyhow::Result<()> {
             ),
         ],
         Decimal::TWO,
+        Decimal::ONE,
     );
 
-    let mut svg = gantt.render().context("render gantt")?;
+    let svg = gantt.render().context("render gantt")?;
     // svg.flip_y();
 
     fs::write("gantt.svg", svg.to_string()).context("write gantt")?;
 
-
     // basic horizontal
     // borders when not both
 
-    let data = Normal::new(50.0, 25.0)?.sample_iter(rand::rng()).take(300);
-    let basic = RectChart::basic(
+    let mut start = Decimal::new(15, 0);
+    let data = Normal::new(1.0, 25.0)?
+        .sample_iter(rand::rng())
+        .filter_map(|f| {
+            let val = Decimal::from_f64(f)?;
+            let prev = start;
+            let next = prev + val;
+            start = next;
+            Some((prev.min(next), prev.max(next)))
+        })
+        .take(500)
+        .collect::<Vec<_>>();
+    let basic = RectChart::timeseries(
         &data,
         Location::Horizontal,
         &[
@@ -287,7 +297,6 @@ fn main() -> anyhow::Result<()> {
             // Decimal::new(100, 0),
         ],
         debug,
-        2,
     );
 
     let mut svg = basic.render().context("render chart")?;
